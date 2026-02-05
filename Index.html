@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lock - Gestión de Proyectos de Obras</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+  
+  <style>
+    :root { --color-base: #556B2F; }
+    .bg-expert { background-color: var(--color-base) !important; color: white; }
+    .btn-expert { background-color: var(--color-base); color: white; border: none; }
+    .btn-expert:hover { background-color: #3e4f22; color: white; }
+    .text-expert { color: var(--color-base); }
+    .border-expert { border-color: var(--color-base) !important; }
+    .loading-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255,255,255,0.8); z-index: 9999;
+      display: flex; justify-content: center; align-items: center;
+    }
+    .cursor-pointer { cursor: pointer; }
+    .selected-row { background-color: rgba(85, 107, 47, 0.1) !important; }
+    .nav-tabs .nav-link.active { background-color: var(--color-base); color: white; border-color: var(--color-base); }
+    .nav-tabs .nav-link { color: var(--color-base); }
+  </style>
+</head>
+<body>
+
+<div id="app" class="container-fluid p-0">
+  <div v-if="loading" class="loading-overlay">
+    <div class="spinner-grow text-expert" role="status"></div>
+  </div>
+
+  <nav class="navbar navbar-dark bg-expert shadow mb-3">
+    <div class="container-fluid">
+      <span class="navbar-brand mb-0 h1">🛠 Lock - Panel de Configuración</span>
+    </div>
+  </nav>
+
+  <div class="container pb-5">
+
+    <div class="alert alert-info mt-2">
+      <small>Debug Etapas: {{ etapas.length }} registros cargados.</small>
+      <details>
+        <summary>Ver datos crudos</summary>
+        <pre>{{ etapas }}</pre>
+      </details>
+    </div>
+
+    <ul class="nav nav-tabs mb-4" id="configTabs" role="tablist">
+      <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-general">⚙️ General</button></li>
+      <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-etapas">📍 Etapas y Tareas</button></li>
+      <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-profesionales">👷 Profesionales</button></li>
+      <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-checklists">📋 Checklists</button></li>
+    </ul>
+
+    <div class="tab-content pt-2">
+      <div class="tab-pane fade show active" id="tab-general">
+        <div class="card shadow-sm border-0">
+          <div class="card-body">
+            <h5 class="card-title text-expert">Repositorio de Google Drive</h5>
+            <div class="input-group">
+              <input type="text" v-model="config.driveUrl" class="form-control" placeholder="Pega la URL de la carpeta raíz">
+              <button class="btn btn-expert" @click="saveDriveUrl">💾 Guardar Configuración</button>
+            </div>
+            <p class="small text-muted mt-2">Esta URL se utilizará para centralizar las evidencias de todos los proyectos en Lock.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="tab-etapas">
+        <div class="row">
+          <div class="col-md-7">
+            <div class="card shadow-sm border-0 h-100">
+              <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <span class="fw-bold">Etapas del Ciclo de Vida</span>
+                <button class="btn btn-sm btn-expert" @click="openModal('etapa')">➕ Nueva</button>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                  <thead class="table-light"><tr><th>Orden</th><th>Etapa</th><th class="text-end px-3">Acciones</th></tr></thead>
+                  <tbody>
+                    <tr v-for="e in etapas" :key="e.id" @click="selectEtapa(e)" :class="{'selected-row': selectedEtapa?.id === e.id}" class="cursor-pointer">
+                      <td width="80" class="text-center">{{e.orden}}</td>
+                      <td><strong>{{e.nombre_etapa}}</strong></td>
+                      <td class="text-end px-3">
+                        <button class="btn btn-sm btn-link text-expert" @click.stop="openModal('etapa', e)">✏️</button>
+                        <button class="btn btn-sm btn-link text-danger" @click.stop="deleteRecord('CONF_ETAPAS', e.id)">🗑</button>
+                      </td>
+                    </tr>
+                    <tr v-if="etapas.length === 0"><td colspan="3" class="text-center py-4 text-muted">No hay etapas configuradas.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-5">
+            <div v-if="selectedEtapa" class="card shadow-sm border-expert h-100">
+              <div class="card-header bg-expert d-flex justify-content-between align-items-center">
+                <span class="small fw-bold">Tareas: {{selectedEtapa.nombre_etapa}}</span>
+                <button class="btn btn-sm btn-light py-0" @click="addTarea">➕ Añadir</button>
+              </div>
+              <div class="card-body">
+                <div v-for="(t, i) in tareasFiltradas" :key="i" class="mb-2 p-2 border rounded bg-light shadow-sm">
+                  <div class="input-group input-group-sm mb-1">
+                    <input type="text" v-model="t.nombre_tarea" class="form-control" placeholder="Nombre tarea">
+                    <button class="btn btn-outline-danger" @click="removeTareaLocal(i, t.id)">✕</button>
+                  </div>
+                  <div class="form-check form-switch"><input class="form-check-input" type="checkbox" v-model="t.requiere_evidencia"><label class="small">Evidencia obligatoria</label></div>
+                </div>
+                <button v-if="tareasFiltradas.length" class="btn btn-expert w-100 mt-2" @click="saveTareasBatch">💾 Guardar Tareas</button>
+              </div>
+            </div>
+            <div v-else class="card h-100 d-flex align-items-center justify-content-center border-0 bg-light text-muted">
+              <small>Selecciona una etapa para gestionar sus tareas</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="tab-profesionales">
+        <div class="card shadow-sm border-0">
+          <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <span class="fw-bold">Maestro de Profesionales / Técnicos</span>
+            <button class="btn btn-sm btn-expert" @click="openModal('profesional')">➕ Nuevo</button>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead class="table-light"><tr><th>Nombre</th><th>Especialidad</th><th>Email</th><th class="text-end px-3">Acciones</th></tr></thead>
+              <tbody>
+                <tr v-for="p in profesionales" :key="p.id">
+                  <td>{{p.nombre_completo}}</td>
+                  <td>{{p.especialidad}}</td>
+                  <td>{{p.email}}</td>
+                  <td class="text-end px-3">
+                    <button class="btn btn-sm btn-link text-expert" @click="openModal('profesional', p)">✏️</button>
+                    <button class="btn btn-sm btn-link text-danger" @click="deleteRecord('CONF_PROFESIONALES', p.id)">🗑</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="tab-checklists">
+        <div class="card shadow-sm border-0">
+          <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <span class="fw-bold">Maestro de Checklists Dinámicos</span>
+            <button class="btn btn-sm btn-expert" @click="openModal('checklist')">➕ Nuevo</button>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead class="table-light"><tr><th>Nombre Checklist</th><th>Ítems</th><th class="text-end px-3">Acciones</th></tr></thead>
+              <tbody>
+                <tr v-for="c in checklists" :key="c.id">
+                  <td><strong>{{c.nombre_checklist}}</strong></td>
+                  <td><span class="badge bg-secondary">{{ parseJson(c.config_json).length }} campos</span></td>
+                  <td class="text-end px-3">
+                    <button class="btn btn-sm btn-link text-expert" @click="openModal('checklist', c)">✏️</button>
+                    <button class="btn btn-sm btn-link text-danger" @click="deleteRecord('CONF_CHECKLISTS', c.id)">🗑</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="modal-etapa" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content border-0 shadow">
+      <div class="modal-header bg-expert"><h5 class="modal-title">Gestión de Etapa</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-3"><label class="form-label fw-bold small">Nombre de la Etapa</label><input type="text" v-model="form.nombre_etapa" class="form-control"></div>
+        <div class="row"><div class="col-6"><label class="form-label fw-bold small">Orden Flujo</label><input type="number" v-model="form.orden" class="form-control"></div>
+        <div class="col-6"><label class="form-label fw-bold small">Color Distintivo</label><input type="color" v-model="form.color_hex" class="form-control form-control-color w-100"></div></div>
+      </div>
+      <div class="modal-footer bg-light"><button class="btn btn-expert px-4" @click="saveGeneric('CONF_ETAPAS')">💾 Guardar</button></div>
+    </div></div>
+  </div>
+
+  <div class="modal fade" id="modal-profesional" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content border-0 shadow">
+      <div class="modal-header bg-expert"><h5 class="modal-title">Perfil de Profesional</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-3"><label class="form-label fw-bold small">Nombre Completo</label><input type="text" v-model="form.nombre_completo" class="form-control"></div>
+        <div class="mb-3"><label class="form-label fw-bold small">Especialidad / Cargo</label><input type="text" v-model="form.especialidad" class="form-control"></div>
+        <div class="mb-3"><label class="form-label fw-bold small">Correo Electrónico</label><input type="email" v-model="form.email" class="form-control"></div>
+      </div>
+      <div class="modal-footer bg-light"><button class="btn btn-expert px-4" @click="saveGeneric('CONF_PROFESIONALES')">💾 Guardar</button></div>
+    </div></div>
+  </div>
+
+  <div class="modal fade" id="modal-checklist" tabindex="-1">
+    <div class="modal-dialog modal-lg"><div class="modal-content border-0 shadow">
+      <div class="modal-header bg-expert"><h5 class="modal-title">Configurador de Checklist</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-3"><label class="form-label fw-bold small">Nombre del Formulario</label><input type="text" v-model="form.nombre_checklist" class="form-control" placeholder="Ej: Acta de Recepción"></div>
+        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+           <h6 class="mb-0">Elementos de Inspección</h6>
+           <button class="btn btn-sm btn-outline-expert" @click="addChecklistItem">➕ Añadir Item</button>
+        </div>
+        <div id="sortable-items">
+          <div v-for="(it, idx) in form.items" :key="idx" class="card mb-2 bg-light border-0 shadow-sm item-drag">
+            <div class="card-body p-2 d-flex align-items-center">
+              <span class="me-3 text-muted cursor-pointer">☰</span>
+              <input type="text" v-model="it.label" class="form-control form-control-sm me-2" placeholder="Pregunta o punto a verificar">
+              <select v-model="it.type" class="form-select form-select-sm w-auto me-2">
+                 <option value="checkvalue">Checkbox</option>
+                 <option value="radiobutton">Opciones Si/No</option>
+              </select>
+              <button class="btn btn-sm text-danger" @click="form.items.splice(idx,1)">✕</button>
+            </div>
+          </div>
+        </div>
+        <div v-if="!form.items?.length" class="text-center py-4 text-muted small">Haz clic en "Añadir Item" para definir el checklist.</div>
+      </div>
+      <div class="modal-footer bg-light"><button class="btn btn-expert px-4" @click="saveChecklist">💾 Guardar en Lock</button></div>
+    </div></div>
+  </div>
+
+</div>
+
+<script>
+  const { createApp, ref, onMounted, nextTick } = Vue;
+
+  createApp({
+    setup() {
+      const loading = ref(false);
+      const config = ref({ driveUrl: '' });
+      const etapas = ref([]);
+      const profesionales = ref([]);
+      const checklists = ref([]);
+      const selectedEtapa = ref(null);
+      const tareasFiltradas = ref([]);
+      const form = ref({});
+      let modales = {};
+
+      // FUNCIÓN DE CARGA ROBUSTA (Corregida)
+      const init = async () => {
+        loading.value = true;
+        try {
+          const load = (sheet) => new Promise((resolve) => {
+            google.script.run
+              .withSuccessHandler(res => resolve(res || []))
+              .withFailureHandler(err => {
+                console.error(`Error cargando ${sheet}:`, err);
+                resolve([]);
+              })
+              .readConfig(sheet);
+          });
+          
+          const [resEtapas, resProfesionales, resChecklists, resGen] = await Promise.all([
+            load("CONF_ETAPAS"),
+            load("CONF_PROFESIONALES"),
+            load("CONF_CHECKLISTS"),
+            load("CONF_GENERAL")
+          ]);
+
+          etapas.value = resEtapas.sort((a,b) => (Number(a.orden) || 0) - (Number(b.orden) || 0));
+          profesionales.value = resProfesionales;
+          checklists.value = resChecklists;
+          
+          // Validación segura para evitar el error de puntero nulo en find
+          const driveData = Array.isArray(resGen) ? resGen : [];
+          const driveParam = driveData.find(p => p.parametro === 'DRIVE_ROOT_FOLDER_URL');
+          config.value.driveUrl = driveParam ? driveParam.valor : '';
+          
+        } catch (error) {
+          console.error("Error crítico en init:", error);
+          Swal.fire('Lock - Error', 'Falla de comunicación con el servidor.', 'error');
+        } finally {
+          loading.value = false;
+        }
+      };
+
+      const openModal = (type, data = null) => {
+        if(type === 'checklist') {
+          form.value = data ? { ...data, items: JSON.parse(data.config_json || '[]') } : { nombre_checklist: '', items: [] };
+          nextTick(initSortable);
+        } else if (type === 'etapa') {
+          form.value = data ? { ...data } : { nombre_etapa: '', orden: etapas.value.length + 1, color_hex: '#556B2F' };
+        } else {
+          form.value = data ? { ...data } : { nombre_completo: '', especialidad: '', email: '' };
+        }
+        modales[type].show();
+      };
+
+      const initSortable = () => {
+        const el = document.getElementById('sortable-items');
+        if(el) Sortable.create(el, { 
+          animation: 150, 
+          handle: '.cursor-pointer',
+          onEnd: (evt) => {
+            const item = form.value.items.splice(evt.oldIndex, 1)[0];
+            form.value.items.splice(evt.newIndex, 0, item);
+          }
+        });
+      };
+
+      const saveGeneric = (sheet) => {
+        loading.value = true;
+        google.script.run
+          .withSuccessHandler((response) => {
+            // 1. Cerramos los modales
+            Object.values(modales).forEach(m => m.hide());
+            
+            // 2. IMPORTANTE: Forzamos la recarga de datos desde Sheets
+            init().then(() => {
+              loading.value = false;
+              Swal.fire('Guardado', 'Los datos se han actualizado en Lock.', 'success');
+            });
+          })
+          .withFailureHandler(err => {
+            loading.value = false;
+            Swal.fire('Error', 'No se pudo guardar: ' + err, 'error');
+          })
+          .saveConfigRecord(sheet, form.value);
+      };
+
+      const saveChecklist = () => {
+        form.value.config_json = JSON.stringify(form.value.items || []);
+        saveGeneric('CONF_CHECKLISTS');
+      };
+
+      const deleteRecord = (sheet, id) => {
+        Swal.fire({ 
+           title: '¿Confirmar eliminación?', 
+           text: 'Esta acción no se puede deshacer.',
+           icon: 'warning', 
+           showCancelButton: true, 
+           confirmButtonColor: '#d33',
+           confirmButtonText: 'Sí, eliminar'
+        }).then(r => {
+          if(r.isConfirmed) {
+            loading.value = true;
+            google.script.run.withSuccessHandler(() => {
+               if(sheet === 'CONF_ETAPAS' && selectedEtapa.value?.id === id) selectedEtapa.value = null;
+               init();
+            }).deleteConfigRecord(sheet, id);
+          }
+        });
+      };
+
+      const selectEtapa = (e) => {
+        selectedEtapa.value = e;
+        loading.value = true;
+        google.script.run.withSuccessHandler(data => { 
+          tareasFiltradas.value = Array.isArray(data) ? data : []; 
+          loading.value = false; 
+        }).getTareasByEtapa(e.id);
+      };
+
+      const addTarea = () => {
+        if(!selectedEtapa.value) return;
+        tareasFiltradas.value.push({ etapa_id: selectedEtapa.value.id, nombre_tarea: '', requiere_evidencia: false });
+      };
+
+      const saveTareasBatch = async () => {
+        loading.value = true;
+        try {
+          // Usamos un bucle for...of para asegurar que termine de guardar todo
+          for(let t of tareasFiltradas.value) {
+            await new Promise((resolve, reject) => {
+              google.script.run
+                .withSuccessHandler(resolve)
+                .withFailureHandler(reject)
+                .saveConfigRecord("CONF_TAREAS", t);
+            });
+          }
+          
+          // 3. REFRESCO CLAVE: Volvemos a pedir las tareas de la etapa actual
+          if (selectedEtapa.value) {
+            selectEtapa(selectedEtapa.value); 
+          }
+          
+          Swal.fire('Tareas Actualizadas', 'Se guardaron los cambios en el ciclo de vida.', 'success');
+        } catch(e) {
+          Swal.fire('Error', 'Falla al guardar tareas masivamente.', 'error');
+        } finally {
+          loading.value = false;
+        }
+      };
+
+      const saveDriveUrl = () => {
+        if(!config.value.driveUrl.includes('drive.google.com')) {
+          return Swal.fire('Error', 'Ingresa una URL de Google Drive válida.', 'error');
+        }
+        loading.value = true;
+        google.script.run.withSuccessHandler(() => { 
+          loading.value = false; 
+          Swal.fire('Drive Configurado', 'Repositorio central de Lock actualizado.', 'success'); 
+        }).updateDriveUrl(config.value.driveUrl);
+      };
+
+      onMounted(() => {
+        modales.etapa = new bootstrap.Modal(document.getElementById('modal-etapa'));
+        modales.profesional = new bootstrap.Modal(document.getElementById('modal-profesional'));
+        modales.checklist = new bootstrap.Modal(document.getElementById('modal-checklist'));
+        init();
+      });
+
+      return { 
+        loading, config, etapas, profesionales, checklists, selectedEtapa, tareasFiltradas, form,
+        saveDriveUrl, openModal, saveGeneric, saveChecklist, deleteRecord, selectEtapa, addTarea, saveTareasBatch,
+        addChecklistItem: () => { if(!form.value.items) form.value.items = []; form.value.items.push({label:'', type:'checkvalue'}); },
+        parseJson: (s) => { try{ return JSON.parse(s || '[]'); }catch(e){ return []; } },
+        removeTareaLocal: (idx, id) => { 
+           if(!id) return tareasFiltradas.value.splice(idx, 1); 
+           deleteRecord('CONF_TAREAS', id); 
+        }
+      };
+    }
+  }).mount('#app');
+</script>
+</body>
+</html>
