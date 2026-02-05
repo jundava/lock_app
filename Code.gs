@@ -227,3 +227,119 @@ function getUserInfo() {
   };
 }
 
+/**
+ * CREACIÓN MAESTRA DE PROYECTO
+ * 1. Guarda el proyecto en DB_PROYECTOS.
+ * 2. Crea la carpeta en Drive.
+ * 3. Crea subcarpetas por Etapa.
+ * 4. Clona las tareas de configuración a ejecución.
+ */
+function createProjectFull(projectData) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000); // Bloqueo más largo, es una operación pesada
+    
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // --- 1. PREPARACIÓN DE DATOS ---
+    const sheetProyectos = ss.getSheetByName("DB_PROYECTOS");
+    const sheetEtapas = ss.getSheetByName("CONF_ETAPAS");
+    const sheetTareas = ss.getSheetByName("CONF_TAREAS");
+    const sheetEjecucion = ss.getSheetByName("DB_EJECUCION");
+    const sheetGeneral = ss.getSheetByName("CONF_GENERAL");
+    
+    if(!projectData.id) projectData.id = Utilities.getUuid();
+    projectData.created_at = new Date();
+    
+    // --- 2. GESTIÓN DE DRIVE ---
+    // Obtener carpeta raíz
+    const genData = sheetGeneral.getDataRange().getValues();
+    const rootUrlRow = genData.find(r => r[0] === "DRIVE_ROOT_FOLDER_URL");
+    let rootFolder;
+    
+    if (rootUrlRow && rootUrlRow[1]) {
+      try {
+        const rootId = rootUrlRow[1].match(/[-\w]{25,}/)[0];
+        rootFolder = DriveApp.getFolderById(rootId);
+      } catch(e) { console.warn("URL Drive inválida"); }
+    }
+    
+    // Crear carpeta del proyecto si existe root
+    if (rootFolder) {
+      const folderName = `${projectData.codigo} - ${projectData.nombre_obra}`;
+      const projectFolder = rootFolder.createFolder(folderName);
+      projectData.drive_folder_id = projectFolder.getId();
+      
+      // Crear subcarpetas por Etapa
+      const etapasRaw = sheetEtapas.getDataRange().getValues();
+      const headersEtapas = etapasRaw.shift();
+      // Mapeamos para obtener objetos limpios
+      const etapas = etapasRaw.map(r => {
+        let obj = {}; headersEtapas.forEach((h, i) => obj[h] = r[i]); return obj;
+      }).sort((a,b) => a.orden - b.orden);
+      
+      etapas.forEach(e => {
+        if(e.nombre_etapa) {
+           projectFolder.createFolder(`${e.orden}. ${e.nombre_etapa}`);
+        }
+      });
+    } else {
+      projectData.drive_folder_id = "NO_CONFIGURADO";
+    }
+
+    // --- 3. GUARDAR PROYECTO (DB_PROYECTOS) ---
+    const headersProj = sheetProyectos.getRange(1, 1, 1, sheetProyectos.getLastColumn()).getValues()[0];
+    const newRowProj = headersProj.map(h => projectData[h] || "");
+    sheetProyectos.appendRow(newRowProj);
+    
+    // --- 4. CLONAR TAREAS (CONF -> EJECUCION) ---
+    // Leemos las plantillas
+    const tareasRaw = sheetTareas.getDataRange().getValues();
+    const headersTareas = tareasRaw.shift(); // Quitamos header
+    
+    // Preparamos los registros para DB_EJECUCION
+    const headersEjec = sheetEjecucion.getRange(1, 1, 1, sheetEjecucion.getLastColumn()).getValues()[0];
+    const rowsToInsert = [];
+    
+    // Recorremos cada tarea plantilla
+    tareasRaw.forEach(r => {
+      // Convertimos fila a objeto temporal
+      let tpl = {}; headersTareas.forEach((h, i) => tpl[h] = r[i]);
+      
+      if(tpl.id) { // Si la tarea plantilla es válida
+        let nuevaTarea = {
+          id: Utilities.getUuid(),
+          proyecto_id: projectData.id,
+          etapa_id: tpl.etapa_id,
+          nombre_tarea: tpl.nombre_tarea,
+          requiere_evidencia: tpl.requiere_evidencia,
+          estado: 'Pendiente',
+          updated_at: new Date()
+        };
+        
+        // Mapeamos al orden de columnas de DB_EJECUCION
+        rowsToInsert.push(headersEjec.map(h => nuevaTarea[h] || ""));
+      }
+    });
+    
+    // Inserción masiva (Batch Insert) para velocidad
+    if(rowsToInsert.length > 0) {
+      sheetEjecucion.getRange(
+        sheetEjecucion.getLastRow() + 1, 
+        1, 
+        rowsToInsert.length, 
+        rowsToInsert[0].length
+      ).setValues(rowsToInsert);
+    }
+    
+    SpreadsheetApp.flush();
+    return { success: true, message: "Proyecto inicializado correctamente" };
+    
+  } catch (e) {
+    console.error(e);
+    throw new Error("Error creando proyecto: " + e.toString());
+  } finally {
+    lock.releaseLock();
+  }
+}
+

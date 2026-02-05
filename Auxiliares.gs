@@ -7,26 +7,53 @@ const carpeta = "https://drive.google.com/file/d/19JlPNv17CWp8RnF1bdiA7C25K2G17U
 function setupDatabase() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // Definición de las tablas maestras de configuración
+  // Definición de las tablas del sistema
   const tables = {
+    // --- MÓDULO DE CONFIGURACIÓN (Templates) ---
     "CONF_ETAPAS": ["id", "nombre_etapa", "orden", "color_hex", "descripcion", "created_at"],
     "CONF_TAREAS": ["id", "etapa_id", "nombre_tarea", "requiere_evidencia", "created_at"],
     
-    // TABLA ACTUALIZADA CON NUEVOS CAMPOS:
     "CONF_PROFESIONALES": [
       "id", 
       "nombre_completo", 
       "especialidad", 
-      "rol",           // Nuevo
-      "telefono",      // Nuevo
+      "rol",           
+      "telefono",      
       "email", 
-      "costo_hora",    // Nuevo
-      "estado",        // Nuevo (Activo/Inactivo)
+      "costo_hora",    
+      "estado",        
       "created_at"
     ],
     
     "CONF_CHECKLISTS": ["id", "nombre_checklist", "config_json", "created_at"], 
-    "CONF_GENERAL": ["parametro", "valor", "descripcion", "updated_at"]
+    "CONF_GENERAL": ["parametro", "valor", "descripcion", "updated_at"],
+
+    // --- MÓDULO OPERATIVO (Datos Reales) ---
+    // Nueva tabla para alojar los proyectos creados
+    "DB_PROYECTOS": [
+      "id",               // UUID único del sistema
+      "codigo",           // Código legible (ej: OBR-2024-001)
+      "nombre_obra",      // Nombre del proyecto
+      "cliente",          // Cliente principal
+      "ubicacion",        // Dirección / Ciudad
+      "fecha_inicio",     
+      "fecha_fin",        // Fecha estimada de entrega
+      "estado",           // Planificación | En Ejecución | Finalizado | Detenido
+      "drive_folder_id",  // ID de la carpeta en Google Drive (CRUCIAL)
+      "created_at"
+    ],
+    "DB_EJECUCION": [
+      "id",               // UUID único de la instancia
+      "proyecto_id",      // Vinculación con el Proyecto
+      "etapa_id",         // Para agrupar (copiado de config)
+      "nombre_tarea",     // Copiado de config (para snapshot)
+      "requiere_evidencia",
+      "estado",           // Pendiente | En Proceso | Aprobado | Rechazado
+      "responsable_id",   // Quién debe hacerlo (opcional)
+      "evidencia_url",    // Link a la foto/archivo en Drive
+      "comentarios",      // Observaciones de obra
+      "updated_at"
+    ]
   };
 
   const lock = LockService.getScriptLock();
@@ -43,16 +70,19 @@ function setupDatabase() {
       // Configurar encabezados
       const headers = tables[tableName];
       
-      // NOTA: Esto sobrescribirá la primera fila. 
-      // Si la hoja ya existe, asegúrate de que los datos coincidan o borra la hoja antes de ejecutar.
-      sheet.getRange(1, 1, 1, headers.length)
+      // Estilizado profesional de encabezados
+      const headerRange = sheet.getRange(1, 1, 1, headers.length);
+      headerRange
            .setValues([headers])
-           .setBackground("#556B2F") // Color base GAS Expert
+           .setBackground("#556B2F") // Color base Lock
            .setFontColor("white")
-           .setFontWeight("bold");
+           .setFontWeight("bold")
+           .setHorizontalAlignment("center");
       
-      // Congelar la primera fila
+      // Ajuste visual extra
       sheet.setFrozenRows(1);
+      // Auto-resize solo si es nueva (para no molestar visualmente si ya tiene datos)
+      if (sheet.getLastRow() <= 1) sheet.autoResizeColumns(1, headers.length);
     });
 
     // Inicializar parámetro de Drive si no existe
@@ -64,6 +94,8 @@ function setupDatabase() {
     if (!exists) {
       confSheet.appendRow([driveParam, "", "URL raíz para almacenamiento de evidencias", new Date()]);
     }
+
+    SpreadsheetApp.getUi().alert("✅ Base de datos actualizada. Tabla DB_PROYECTOS lista.");
     
   } catch (e) {
     console.error("Error en setupDatabase: " + e.toString());

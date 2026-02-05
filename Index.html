@@ -202,6 +202,39 @@
       display: flex; justify-content: center; align-items: center;
       backdrop-filter: blur(2px);
     }
+    /* Estilos para Maestro-Detalle */
+    .bg-expert-light {
+      background-color: rgba(85, 107, 47, 0.1) !important;
+    }
+
+    .cursor-pointer {
+      cursor: pointer;
+    }
+
+    .transition-effect {
+      transition: all 0.2s ease;
+    }
+
+    .border-dashed {
+      border-style: dashed !important;
+    }
+
+    /* Scrollbar fino para la lista de tareas */
+    .overflow-auto::-webkit-scrollbar {
+      width: 6px;
+    }
+    .overflow-auto::-webkit-scrollbar-thumb {
+      background-color: #ccc;
+      border-radius: 4px;
+    }
+
+    .hover-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+      .hover-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;
+      }
   </style>
 </head>
 <body>
@@ -223,7 +256,7 @@
       </button>
       
       <div class="mt-4 pt-3 border-top">
-        <small class="text-muted" style="font-size: 0.7rem;">v2.2.0 &bull; Jun Expert - Enterprise Edition</small>
+        <small class="text-muted" style="font-size: 0.7rem;">v2.2.0 &bull; Taniwaki Expert 谷脇 淳 - Enterprise Edition</small>
       </div>
     </div>
   </div>
@@ -327,7 +360,7 @@
                   <li class="nav-item"><button class="nav-link rounded-0 py-3 active" data-bs-toggle="tab" data-bs-target="#tab-general">General</button></li>
                   <li class="nav-item"><button class="nav-link rounded-0 py-3" data-bs-toggle="tab" data-bs-target="#tab-etapas">Etapas</button></li>
                   <li class="nav-item"><button class="nav-link rounded-0 py-3" data-bs-toggle="tab" data-bs-target="#tab-profesionales">Equipo</button></li>
-                  <li class="nav-item"><button class="nav-link rounded-0 py-3" data-bs-toggle="tab" data-bs-target="#tab-checklists">Checklists</button></li>
+                  <li class="nav-item"><button class="nav-link rounded-0 py-3" data-bs-toggle="tab" data-bs-target="#tab-checklists">Protocolos</button></li>
                </ul>
             </div>
             <div class="card-body bg-light">
@@ -342,24 +375,114 @@
                      </div>
                   </div>
                   <div class="tab-pane fade" id="tab-etapas">
-                     <div class="bg-white rounded shadow-sm p-3">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                           <h6 class="mb-0 fw-bold">Etapas</h6>
-                           <button class="btn btn-sm btn-expert rounded-pill px-3" @click="openModal('etapa')">+ Crear</button>
-                        </div>
-                        <div class="table-responsive">
-                           <table class="table table-hover align-middle mb-0">
-                              <thead class="table-light small"><tr><th>Orden</th><th>Nombre</th><th class="text-end">Acción</th></tr></thead>
+                    <div class="row h-100">
+                      
+                      <div class="col-md-6 mb-3">
+                        <div class="bg-white rounded shadow-sm h-100">
+                          <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0 fw-bold text-expert"><i class="bi bi-diagram-3 me-2"></i>Etapas del Proyecto</h6>
+                            <button class="btn btn-sm btn-expert rounded-pill px-3" @click="openModal('etapa')">
+                              <i class="bi bi-plus-lg"></i> Crear
+                            </button>
+                          </div>
+                          <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                            <table class="table table-hover align-middle mb-0">
+                              <thead class="table-light small sticky-top">
+                                <tr>
+                                  <th class="ps-3">Orden</th>
+                                  <th>Nombre</th>
+                                  <th class="text-end pe-3">Acción</th>
+                                </tr>
+                              </thead>
                               <tbody>
-                                 <tr v-for="e in etapas" :key="e.id">
-                                    <td><span class="badge bg-light text-dark border">{{e.orden}}</span></td>
-                                    <td><span class="d-inline-block rounded-circle me-2" :style="{width:'10px', height:'10px', backgroundColor: e.color_hex}"></span>{{e.nombre_etapa}}</td>
-                                    <td class="text-end"><button class="btn btn-sm text-danger" @click="deleteRecord('CONF_ETAPAS', e.id)"><i class="bi bi-trash"></i></button></td>
-                                 </tr>
+                                <tr v-for="e in etapas" :key="e.id" 
+                                    @click="selectEtapa(e)" 
+                                    class="cursor-pointer transition-effect"
+                                    :class="{'bg-expert-light border-start border-4 border-expert': selectedEtapa?.id === e.id}">
+                                  <td class="ps-3">
+                                    <span class="badge bg-light text-dark border">{{e.orden}}</span>
+                                  </td>
+                                  <td>
+                                    <span class="d-inline-block rounded-circle me-2" 
+                                          :style="{width:'10px', height:'10px', backgroundColor: e.color_hex}"></span>
+                                    <span :class="{'fw-bold text-expert': selectedEtapa?.id === e.id}">{{e.nombre_etapa}}</span>
+                                  </td>
+                                  <td class="text-end pe-3">
+                                    <button class="btn btn-sm text-danger p-0" @click.stop="deleteRecord('CONF_ETAPAS', e.id)" title="Borrar Etapa">
+                                      <i class="bi bi-trash"></i>
+                                    </button>
+                                  </td>
+                                </tr>
+                                <tr v-if="etapas.length === 0">
+                                  <td colspan="3" class="text-center py-4 text-muted small">No hay etapas definidas.</td>
+                                </tr>
                               </tbody>
-                           </table>
+                            </table>
+                          </div>
                         </div>
-                     </div>
+                      </div>
+
+                      <div class="col-md-6 mb-3">
+                        <div class="bg-white rounded shadow-sm h-100 d-flex flex-column position-relative overflow-hidden">
+                          
+                          <div v-if="!selectedEtapa" class="d-flex flex-column align-items-center justify-content-center h-100 text-muted p-5 text-center">
+                            <i class="bi bi-arrow-left-circle display-4 mb-3 opacity-25"></i>
+                            <h6>Selecciona una Etapa</h6>
+                            <p class="small">Haz clic en una etapa de la izquierda para configurar sus tareas.</p>
+                          </div>
+
+                          <div v-else class="d-flex flex-column h-100 fade-in">
+                            <div class="p-3 border-bottom bg-expert text-white d-flex justify-content-between align-items-center">
+                              <div>
+                                <small class="opacity-75 text-uppercase" style="font-size: 0.7rem;">Configurando Tareas de:</small>
+                                <h6 class="mb-0 fw-bold">{{ selectedEtapa.nombre_etapa }}</h6>
+                              </div>
+                              <span class="badge bg-white text-expert">{{ tareasFiltradas.length }} Tareas</span>
+                            </div>
+
+                            <div class="flex-grow-1 p-3 overflow-auto" style="max-height: 400px;">
+                              <div v-if="tareasFiltradas.length === 0" class="text-center py-4 border dashed rounded text-muted mb-3">
+                                <small>No hay tareas registradas para esta etapa.</small>
+                              </div>
+
+                              <div v-for="(t, index) in tareasFiltradas" :key="index" class="card border-0 shadow-sm mb-2 bg-light">
+                                <div class="card-body p-2 d-flex align-items-center">
+                                  <div class="me-2 text-muted px-2"><i class="bi bi-list-task"></i></div>
+                                  
+                                  <div class="flex-grow-1">
+                                    <input type="text" v-model="t.nombre_tarea" 
+                                          class="form-control form-control-sm border-0 bg-transparent fw-bold" 
+                                          placeholder="Nombre de la tarea...">
+                                    
+                                    <div class="form-check form-switch ms-1">
+                                      <input class="form-check-input" type="checkbox" :id="'check'+index" v-model="t.requiere_evidencia">
+                                      <label class="form-check-label small text-muted" :for="'check'+index" style="font-size: 0.75rem;">
+                                        {{ t.requiere_evidencia ? '📸 Requiere Foto/Doc' : '⚪ Registro Simple' }}
+                                      </label>
+                                    </div>
+                                  </div>
+
+                                  <button class="btn btn-sm text-danger ms-2" @click="removeTareaLocal(index, t.id)">
+                                    <i class="bi bi-x-lg"></i>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div class="p-3 border-top bg-light mt-auto">
+                              <button class="btn btn-outline-expert w-100 mb-2 border-dashed" @click="addTareaLocal">
+                                <i class="bi bi-plus-circle me-1"></i> Agregar Nueva Tarea
+                              </button>
+                              <button class="btn btn-expert w-100 shadow-sm" @click="saveTareasBatch" :disabled="loading">
+                                <i class="bi bi-save me-2"></i> Guardar Cambios en Tareas
+                              </button>
+                            </div>
+                          </div>
+
+                        </div>
+                      </div>
+
+                    </div>
                   </div>
                   <div class="tab-pane fade" id="tab-profesionales">
                     <div class="bg-white rounded shadow-sm">
@@ -514,11 +637,74 @@
       </div>
 
       <div v-if="currentView === 'projects'" class="fade-in">
-         <div class="text-center py-5 mt-4">
-            <i class="bi bi-cone-striped text-warning display-1"></i>
-            <h3 class="mt-3">Módulo de Proyectos</h3>
-            <p class="text-muted">En construcción...</p>
-         </div>
+        
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+          <div>
+            <h4 class="fw-bold mb-0 text-dark">Mis Proyectos</h4>
+            <small class="text-muted">Gestión operativa de obras</small>
+          </div>
+          
+          <div class="d-flex gap-2">
+            <div class="input-group input-group-sm shadow-sm" style="width: 200px;">
+              <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+              <input type="text" class="form-control border-start-0" placeholder="Buscar obra...">
+            </div>
+            
+            <button class="btn btn-expert d-flex align-items-center shadow-sm" @click="openModal('proyecto')">
+              <i class="bi bi-plus-lg me-2"></i> Nuevo Proyecto
+            </button>
+          </div>
+        </div>
+
+        <div v-if="proyectos.length === 0" class="text-center py-5 border rounded bg-white shadow-sm">
+          <div class="mb-3 text-muted opacity-50"><i class="bi bi-building-add" style="font-size: 4rem;"></i></div>
+          <h5>No tienes proyectos registrados</h5>
+          <p class="text-muted small">Crea el primero para comenzar a gestionar tareas y evidencias.</p>
+          <button class="btn btn-outline-expert btn-sm" @click="openModal('proyecto')">Crear Proyecto</button>
+        </div>
+
+        <div v-else class="row g-4">
+          <div v-for="p in proyectos" :key="p.id" class="col-12 col-md-6 col-xl-4">
+            <div class="card border-0 shadow-sm h-100 hover-card project-card">
+              <div class="card-body">
+                <div class="d-flex justify-content-between mb-2">
+                  <span class="badge rounded-pill border shadow-sm text-white" 
+                        :style="{ backgroundColor: getEtapaColor(p.estado) }">
+                    {{ p.estado }}
+                  </span>
+                  <small class="text-muted fw-bold">{{ p.codigo }}</small>
+                </div>
+                
+                <h5 class="card-title fw-bold text-dark mb-1 text-truncate">{{ p.nombre_obra }}</h5>
+                <p class="card-text text-muted small mb-3"><i class="bi bi-person me-1"></i> {{ p.cliente }}</p>
+                
+                <div class="row g-2 small text-muted mb-3 bg-light p-2 rounded mx-0">
+                  <div class="col-6"><i class="bi bi-geo-alt me-1"></i> {{ p.ubicacion || 'Sin ubicación' }}</div>
+                  <div class="col-6 text-end"><i class="bi bi-calendar-event me-1"></i> {{ formatDate(p.fecha_inicio) }}</div>
+                </div>
+
+                <div class="mb-3">
+                  <div class="d-flex justify-content-between small mb-1">
+                    <span>Progreso estimado</span>
+                    <span class="fw-bold text-expert">0%</span>
+                  </div>
+                  <div class="progress" style="height: 6px;">
+                    <div class="progress-bar bg-expert" role="progressbar" style="width: 0%"></div>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="card-footer bg-white border-top-0 pb-3 pt-0 d-flex justify-content-between align-items-center">
+                <button class="btn btn-sm btn-outline-secondary" @click="openModal('proyecto', p)">
+                  <i class="bi bi-pencil"></i> Editar
+                </button>
+                <button class="btn btn-sm btn-expert px-3">
+                  Gestionar Obra <i class="bi bi-arrow-right ms-1"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
 
@@ -576,7 +762,10 @@
               <label class="form-label small fw-bold text-muted">Rol en Obra *</label>
               <select v-model="form.rol" class="form-select">
                 <option value="" disabled>Seleccione...</option>
-                <option value="Director de Obra">Director de Obra</option>
+                <option value="Proyectista Senior">Proyectista Senior</option>
+                <option value="Proyectista Junior">Proyectista Junior</option>
+                <option value="Asistente de Proyectos">Asistente de Proyectos</option>
+                <option value="Director de Obras">Director de Obra</option>
                 <option value="Residente">Residente</option>
                 <option value="Arquitecto">Arquitecto</option>
                 <option value="Ingeniero">Ingeniero</option>
@@ -706,6 +895,75 @@
     </div>
   </div>
 
+  <div class="modal fade" id="modal-proyecto" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-expert text-white">
+        <h5 class="modal-title fs-6"><i class="bi bi-building-gear me-2"></i>Ficha de Proyecto</h5>
+        <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body bg-light">
+        
+        <div class="row g-3 mb-3">
+           <div class="col-md-3">
+             <label class="form-label small fw-bold">Código</label>
+             <input type="text" v-model="form.codigo" class="form-control" placeholder="Ej: OBR-001">
+           </div>
+           <div class="col-md-9">
+             <label class="form-label small fw-bold">Nombre de la Obra</label>
+             <input type="text" v-model="form.nombre_obra" class="form-control" placeholder="Ej: Residencia Familia González">
+           </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+           <div class="col-md-6">
+             <label class="form-label small fw-bold">Beneficiado</label>
+             <input type="text" v-model="form.cliente" class="form-control">
+           </div>
+           <div class="col-md-6">
+             <label class="form-label small fw-bold">Ubicación / Ciudad</label>
+             <input type="text" v-model="form.ubicacion" class="form-control">
+           </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+           <div class="card-body bg-white rounded">
+             <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label small fw-bold text-muted">Fecha Inicio</label>
+                  <input type="date" v-model="form.fecha_inicio" class="form-control">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label small fw-bold text-muted">Fecha Fin (Estimada)</label>
+                  <input type="date" v-model="form.fecha_fin" class="form-control">
+                </div>
+                <div class="col-md-4"><label class="form-label small fw-bold text-muted">Estado Actual</label>
+                  <select v-model="form.estado" class="form-select">
+                    <option v-for="e in etapas" :key="e.id" :value="e.nombre_etapa">{{ e.orden }} - {{ e.nombre_etapa }}</option>
+                  </select>
+                </div>
+             </div>
+           </div>
+        </div>
+
+        <div v-if="!form.id" class="alert alert-info mt-3 d-flex align-items-center small mb-0">
+           <i class="bi bi-folder-plus me-2 fs-4"></i>
+           <div>
+             <strong>Creación Automática de Carpetas</strong>
+             <br>Al guardar, se creará la estructura en Google Drive automáticamente.
+           </div>
+        </div>
+
+      </div>
+      <div class="modal-footer bg-white border-0">
+        <button class="btn btn-expert w-100 rounded-pill shadow-sm" @click="saveProyecto">
+           <i class="bi bi-save me-2"></i> Guardar Proyecto
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 </div>
 
 <script>
@@ -721,9 +979,16 @@
       
       // --- DATOS DE NEGOCIO ---
       const config = ref({ driveUrl: '' });
+      const proyectos = ref([]); // NUEVO: Lista de proyectos
       const etapas = ref([]);
       const profesionales = ref([]); 
-      const checklists = ref([]); // NUEVO: Inicializamos array de checklists
+      const checklists = ref([]); 
+      
+      // Datos Tareas
+      const allTareas = ref([]); 
+      const tareasFiltradas = ref([]); 
+      const selectedEtapa = ref(null); 
+      
       const form = ref({});
       
       // --- FILTROS Y UI ---
@@ -746,7 +1011,7 @@
           userEmail.value = userInfo.email;
           isLoggedIn.value = true;
           loading.value = false;
-          loadData();
+          loadData(); // Carga inicial
         }).getUserInfo();
       };
 
@@ -757,32 +1022,51 @@
 
       const navigate = (view) => {
         currentView.value = view;
-        if(view === 'config') loadData();
+        // Recargar datos siempre al navegar para asegurar frescura
+        loadData();
       };
 
       // --- CARGA DE DATOS (BACKEND) ---
       const loadData = async () => {
-        if(currentView.value !== 'config') return;
-        
         loading.value = true;
         try {
            const load = (s) => new Promise(r => google.script.run.withSuccessHandler(res => r(res||[])).readConfig(s));
            
-           // CARGA PARALELA (Incluyendo Checklists)
-           const [resEtapas, resProf, resCheck, resGen] = await Promise.all([
-             load("CONF_ETAPAS"),
-             load("CONF_PROFESIONALES"),
-             load("CONF_CHECKLISTS"), // Cargamos checklists
-             load("CONF_GENERAL")
+           // 1. CARGA BASE (Proyectos + Etapas)
+           // IMPORTANTE: Cargamos ETAPAS siempre, porque el modal de proyecto las necesita 
+           // para el select dinámico y las tarjetas para el color de estado.
+           const [resProyectos, resEtapas] = await Promise.all([
+              load("DB_PROYECTOS"),
+              load("CONF_ETAPAS")
            ]);
-           
+
+           proyectos.value = resProyectos.reverse(); // Los más recientes primero
+           // Ordenamos las etapas numéricamente para que el flujo sea lógico
            etapas.value = resEtapas.sort((a,b) => (Number(a.orden)||0)-(Number(b.orden)||0));
-           profesionales.value = resProf;
-           checklists.value = resCheck; // Asignamos checklists
-           
-           const driveData = Array.isArray(resGen) ? resGen : [];
-           const dUrl = driveData.find(p => p.parametro === 'DRIVE_ROOT_FOLDER_URL');
-           config.value.driveUrl = dUrl ? dUrl.valor : '';
+
+           // 2. CARGA RESTO DE CONFIGURACIÓN (Solo si estamos en la vista 'config')
+           if(currentView.value === 'config') {
+               const [resProf, resCheck, resTareas, resGen] = await Promise.all([
+                 // Nota: CONF_ETAPAS ya no está aquí porque se cargó arriba
+                 load("CONF_PROFESIONALES"),
+                 load("CONF_CHECKLISTS"), 
+                 load("CONF_TAREAS"),
+                 load("CONF_GENERAL")
+               ]);
+               
+               profesionales.value = resProf;
+               checklists.value = resCheck;
+               allTareas.value = resTareas;
+               
+               // Refrescar detalle de tareas si hay etapa seleccionada en el maestro-detalle
+               if(selectedEtapa.value) {
+                  filterTareasForStage(selectedEtapa.value.id);
+               }
+               
+               const driveData = Array.isArray(resGen) ? resGen : [];
+               const dUrl = driveData.find(p => p.parametro === 'DRIVE_ROOT_FOLDER_URL');
+               config.value.driveUrl = dUrl ? dUrl.valor : '';
+           }
 
         } catch(e) { 
           console.error("Error en loadData:", e);
@@ -792,54 +1076,174 @@
         }
       };
 
-      // --- GESTIÓN DE MODALES Y LOGICA CHECKLIST ---
-      
-      // 1. Helper para JSON seguro
-      const parseJson = (str) => {
-        try { return JSON.parse(str || '[]'); } 
-        catch(e) { return []; }
+      // --- PROYECTOS ---
+      const saveProyecto = () => {
+        if(!form.value.nombre_obra || !form.value.codigo) {
+          return Swal.fire('Faltan datos', 'El código y el nombre son obligatorios', 'warning');
+        }
+        
+        loading.value = true;
+        const payload = JSON.parse(JSON.stringify(form.value));
+        
+        // SI ES NUEVO (No tiene ID), usamos la función de creación completa
+        if (!payload.id) {
+            google.script.run
+              .withSuccessHandler(() => {
+                  modales.proyecto.hide();
+                  loadData(); 
+                  Swal.fire({
+                    title: '¡Proyecto Inicializado!',
+                    text: 'Se han creado las carpetas en Drive y asignado las tareas.',
+                    icon: 'success'
+                  });
+              })
+              .withFailureHandler(err => {
+                  loading.value = false;
+                  Swal.fire('Error Crítico', err.message, 'error');
+              })
+              .createProjectFull(payload); // <--- LLAMADA A LA NUEVA FUNCIÓN
+        } 
+        else {
+            // SI ES EDICIÓN, usamos la genérica (solo actualiza nombre/estado)
+            google.script.run.withSuccessHandler(() => {
+                modales.proyecto.hide();
+                loadData(); 
+                Swal.fire('Actualizado', 'Datos del proyecto modificados.', 'success');
+            }).saveConfigRecord("DB_PROYECTOS", payload);
+        }
       };
 
-      // 2. Agregar item al checklist
+      const getStatusColor = (estado) => {
+        switch(estado) {
+            case 'Planificación': return 'bg-secondary bg-opacity-10 text-secondary border-secondary';
+            case 'En Ejecución': return 'bg-success bg-opacity-10 text-success border-success';
+            case 'Detenido': return 'bg-danger bg-opacity-10 text-danger border-danger';
+            case 'Finalizado': return 'bg-primary bg-opacity-10 text-primary border-primary';
+            default: return 'bg-light text-dark';
+        }
+      };
+
+      const formatDate = (dateString) => {
+        if(!dateString) return '-';
+        try {
+            // Ajuste simple de zona horaria para display
+            return new Date(dateString).toLocaleDateString();
+        } catch(e) { return dateString; }
+      };
+
+      // --- LÓGICA DE TAREAS (MAESTRO-DETALLE) ---
+      const selectEtapa = (etapa) => {
+        selectedEtapa.value = etapa;
+        filterTareasForStage(etapa.id);
+      };
+
+      const filterTareasForStage = (etapaId) => {
+        tareasFiltradas.value = allTareas.value
+          .filter(t => t.etapa_id === etapaId)
+          .map(t => ({...t})); 
+      };
+
+      const addTareaLocal = () => {
+        if(!selectedEtapa.value) return;
+        tareasFiltradas.value.push({
+          id: '', 
+          etapa_id: selectedEtapa.value.id,
+          nombre_tarea: '',
+          requiere_evidencia: false,
+          created_at: null // Sanitizado
+        });
+        
+        nextTick(() => {
+          const container = document.querySelector('.overflow-auto'); 
+          if(container) container.scrollTop = container.scrollHeight;
+        });
+      };
+
+      const removeTareaLocal = (index, id) => {
+        if (!id) {
+          tareasFiltradas.value.splice(index, 1);
+        } else {
+          Swal.fire({
+            title: '¿Eliminar Tarea?', text: "Se borrará permanentemente.", icon: 'warning',
+            showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Sí, borrar'
+          }).then((r) => {
+            if(r.isConfirmed) {
+              loading.value = true;
+              google.script.run.withSuccessHandler(() => {
+                tareasFiltradas.value.splice(index, 1);
+                allTareas.value = allTareas.value.filter(t => t.id !== id);
+                loading.value = false;
+                Swal.fire('Borrado', 'Tarea eliminada.', 'success');
+              }).deleteConfigRecord('CONF_TAREAS', id);
+            }
+          });
+        }
+      };
+
+      const saveTareasBatch = async () => {
+        if(tareasFiltradas.value.length === 0 && !selectedEtapa.value) return;
+        
+        const invalid = tareasFiltradas.value.find(t => !t.nombre_tarea || !t.nombre_tarea.trim());
+        if(invalid) return Swal.fire('Error', 'Todas las tareas deben tener un nombre.', 'warning');
+
+        loading.value = true;
+        try {
+          for(let t of tareasFiltradas.value) {
+            // Sanitizar objeto (Crucial para evitar error Illegal Value)
+            const tareaPlana = JSON.parse(JSON.stringify(t));
+            await new Promise((resolve, reject) => {
+              google.script.run
+                .withSuccessHandler(resolve)
+                .withFailureHandler(reject)
+                .saveConfigRecord("CONF_TAREAS", tareaPlana);
+            });
+          }
+          await loadData(); 
+          Swal.fire('Guardado', 'Tareas actualizadas correctamente.', 'success');
+        } catch(e) {
+          console.error(e);
+          Swal.fire('Error', 'Hubo un problema al guardar las tareas.', 'error');
+        } finally {
+          loading.value = false;
+        }
+      };
+
+      // --- GESTIÓN DE MODALES Y CHECKLISTS ---
+      const parseJson = (str) => {
+        try { return JSON.parse(str || '[]'); } catch(e) { return []; }
+      };
+
       const addChecklistItem = () => {
         if (!form.value.items) form.value.items = [];
         form.value.items.push({ label: '', type: 'checkvalue' });
-        
-        // Scroll al fondo
         nextTick(() => {
           const container = document.getElementById('sortable-items');
           if(container) container.scrollTop = container.scrollHeight;
         });
       };
 
-      // 3. Abrir Modales
       const openModal = (type, data = null) => {
-         // Lógica Modal Etapa
+         // 1. Modal Etapa
          if (type === 'etapa') {
             form.value = data ? { ...data } : { nombre_etapa: '', orden: etapas.value.length + 1, color_hex: '#556B2F' };
          } 
-         // Lógica Modal Profesional
+         // 2. Modal Profesional
          else if (type === 'profesional') {
             form.value = data ? { ...data } : { 
               nombre_completo: '', rol: '', especialidad: '', 
               email: '', telefono: '', costo_hora: 0, estado: 'Activo' 
             };
          }
-         // Lógica Modal Checklist (NUEVO)
+         // 3. Modal Checklist
          else if (type === 'checklist') {
             const items = data ? parseJson(data.config_json) : [];
             form.value = data ? { ...data, items } : { nombre_checklist: '', items: [] };
             
-            // Inicializar SortableJS después de que el DOM se actualice
             nextTick(() => {
                const el = document.getElementById('sortable-items');
                if (el) {
-                  // Destruir instancia previa si existe para evitar conflictos
-                  // (Sortable maneja esto bien, pero por seguridad reinicializamos)
                   Sortable.create(el, {
-                     animation: 150,
-                     handle: '.handle', // Arrastrar solo desde el icono
-                     ghostClass: 'bg-light',
+                     animation: 150, handle: '.handle', ghostClass: 'bg-light',
                      onEnd: (evt) => {
                         const item = form.value.items.splice(evt.oldIndex, 1)[0];
                         form.value.items.splice(evt.newIndex, 0, item);
@@ -848,16 +1252,29 @@
                }
             });
          }
+         // 4. Modal Proyecto (NUEVO)
+         else if (type === 'proyecto') {
+            // Obtenemos el nombre de la primera etapa (orden más bajo)
+            const etapaInicial = etapas.value.length > 0 ? etapas.value[0].nombre_etapa : '';
+            
+            form.value = data ? { ...data } : { 
+                codigo: '', 
+                nombre_obra: '', 
+                cliente: '', 
+                ubicacion: '', 
+                fecha_inicio: '', 
+                fecha_fin: '', 
+                estado: etapaInicial // <--- Defecto dinámico
+            };
+         }
 
          if(modales[type]) modales[type].show();
       };
 
-      // 4. Guardado específico de Checklist
       const saveChecklist = () => {
         if (!form.value.nombre_checklist) return Swal.fire('Atención', 'Ponle un nombre al protocolo.', 'warning');
         if (!form.value.items || form.value.items.length === 0) return Swal.fire('Atención', 'Agrega al menos un ítem.', 'warning');
 
-        // Serializar a JSON
         form.value.config_json = JSON.stringify(form.value.items);
         saveGeneric('CONF_CHECKLISTS');
       };
@@ -905,26 +1322,46 @@
 
       // --- ON MOUNTED ---
       onMounted(() => {
-         const elEtapa = document.getElementById('modal-etapa');
-         if(elEtapa) modales.etapa = new bootstrap.Modal(elEtapa);
+         // Inicializar instancias de todos los modales
+         const modalIds = ['modal-etapa', 'modal-profesional', 'modal-checklist', 'modal-proyecto'];
          
-         const elProf = document.getElementById('modal-profesional');
-         if(elProf) modales.profesional = new bootstrap.Modal(elProf);
-         
-         // NUEVO: Inicializar modal de checklist
-         const elCheck = document.getElementById('modal-checklist');
-         if(elCheck) modales.checklist = new bootstrap.Modal(elCheck);
+         modalIds.forEach(id => {
+             const el = document.getElementById(id);
+             if(el) {
+                 // Extraemos el nombre clave (ej: 'proyecto' de 'modal-proyecto')
+                 const key = id.replace('modal-', '');
+                 modales[key] = new bootstrap.Modal(el);
+             }
+         });
       });
 
+      const getEtapaColor = (nombreEstado) => {
+          // Buscamos la etapa que tenga ese nombre
+          const etapa = etapas.value.find(e => e.nombre_etapa === nombreEstado);
+          // Retornamos su color, o un gris por defecto si no se encuentra
+          return etapa ? etapa.color_hex : '#6c757d';
+      };
+
       return {
+        // Estado
         isLoggedIn, loading, currentView, userEmail, userInitial,
-        config, etapas, profesionales, checklists, form, // Datos expuestos
-        filterStatus, profesionalesFiltrados,
+        // Datos Maestros
+        config, etapas, profesionales, checklists, proyectos,
+        // Datos Tareas
+        allTareas, tareasFiltradas, selectedEtapa,
+        // UI
+        form, filterStatus, profesionalesFiltrados,
+        // Métodos Generales
         login, logout, navigate,
         saveDriveUrl, openModal, saveGeneric, deleteRecord,
         toggleStatus, formatCurrency,
-        // Funciones de Checklist expuestas
-        parseJson, addChecklistItem, saveChecklist
+        // Métodos Checklists
+        parseJson, addChecklistItem, saveChecklist,
+        // Métodos Tareas
+        selectEtapa, addTareaLocal, removeTareaLocal, saveTareasBatch,
+        // Métodos Proyectos
+        saveProyecto, getStatusColor, formatDate,
+        getEtapaColor
       };
     }
   }).mount('#app');
