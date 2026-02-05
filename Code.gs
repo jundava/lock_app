@@ -217,3 +217,13 @@ function saveConfigRecord(tableName, item) {
   }
 }
 
+/* AGREGAR ESTO A TU Code.gs EXISTENTE */
+
+function getUserInfo() {
+  return {
+    email: Session.getActiveUser().getEmail(),
+    // En el futuro podemos buscar nombre y rol en la tabla de Profesionales
+    role: 'Admin' 
+  };
+}
+

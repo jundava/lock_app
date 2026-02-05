@@ -11,9 +11,22 @@ function setupDatabase() {
   const tables = {
     "CONF_ETAPAS": ["id", "nombre_etapa", "orden", "color_hex", "descripcion", "created_at"],
     "CONF_TAREAS": ["id", "etapa_id", "nombre_tarea", "requiere_evidencia", "created_at"],
-    "CONF_PROFESIONALES": ["id", "nombre_completo", "especialidad", "email", "created_at"],
-    "CONF_CHECKLISTS": ["id", "nombre_checklist", "config_json", "created_at"], // config_json guardará tipos y orden
-    "CONF_GENERAL": ["parametro", "valor", "descripcion", "updated_at"] // Para la URL de Drive
+    
+    // TABLA ACTUALIZADA CON NUEVOS CAMPOS:
+    "CONF_PROFESIONALES": [
+      "id", 
+      "nombre_completo", 
+      "especialidad", 
+      "rol",           // Nuevo
+      "telefono",      // Nuevo
+      "email", 
+      "costo_hora",    // Nuevo
+      "estado",        // Nuevo (Activo/Inactivo)
+      "created_at"
+    ],
+    
+    "CONF_CHECKLISTS": ["id", "nombre_checklist", "config_json", "created_at"], 
+    "CONF_GENERAL": ["parametro", "valor", "descripcion", "updated_at"]
   };
 
   const lock = LockService.getScriptLock();
@@ -27,8 +40,11 @@ function setupDatabase() {
         console.log(`Hoja creada: ${tableName}`);
       }
 
-      // Configurar encabezados si la hoja está vacía o si queremos resetear (con precaución)
+      // Configurar encabezados
       const headers = tables[tableName];
+      
+      // NOTA: Esto sobrescribirá la primera fila. 
+      // Si la hoja ya existe, asegúrate de que los datos coincidan o borra la hoja antes de ejecutar.
       sheet.getRange(1, 1, 1, headers.length)
            .setValues([headers])
            .setBackground("#556B2F") // Color base GAS Expert
@@ -48,8 +64,6 @@ function setupDatabase() {
     if (!exists) {
       confSheet.appendRow([driveParam, "", "URL raíz para almacenamiento de evidencias", new Date()]);
     }
-
-    SpreadsheetApp.getUi().alert("✅ Base de datos inicializada con éxito.");
     
   } catch (e) {
     console.error("Error en setupDatabase: " + e.toString());

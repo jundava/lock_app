@@ -3,421 +3,932 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lock - Gestión de Proyectos de Obras</title>
+  <title>Lock - Gestión de Obras</title>
+  
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-  
+
   <style>
-    :root { --color-base: #556B2F; }
+    /* --- VARIABLES GLOBALES --- */
+    :root { 
+      --color-base: #556B2F; 
+      --color-base-dark: #3e4f22;
+      --header-height: 60px;
+      --sidebar-width: 260px;
+      --bottom-nav-height: 70px;
+      
+      /* Dimensiones de Logo */
+      --navbar-logo-height: 96px;
+      --login-logo-height: 96px;
+    }
+    
+    body { 
+      background-color: #f4f6f8; 
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+      overflow-x: hidden; 
+      margin: 0;
+    }
+    
+    /* --- CLASES UTILITARIAS --- */
     .bg-expert { background-color: var(--color-base) !important; color: white; }
+    .text-expert { color: var(--color-base) !important; }
     .btn-expert { background-color: var(--color-base); color: white; border: none; }
-    .btn-expert:hover { background-color: #3e4f22; color: white; }
-    .text-expert { color: var(--color-base); }
-    .border-expert { border-color: var(--color-base) !important; }
+    .btn-expert:hover { background-color: var(--color-base-dark); color: white; }
+    
+    .fade-in { animation: fadeIn 0.3s ease-in-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* --- 1. PANTALLA DE LOGIN (Mejorada) --- */
+    .login-container {
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, #6d8541 0%, #2c3e16 100%);
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 380px;
+      background: rgba(255, 255, 255, 0.98);
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+      padding: 2.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .login-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 5px;
+      background: var(--color-base);
+    }
+
+    .login-logo-img {
+      height: var(--login-logo-height);
+      width: auto;
+      object-fit: contain;
+      margin-bottom: 1rem;
+    }
+
+    /* --- 2. NAVBAR SUPERIOR (Global) --- */
+    .top-navbar {
+      height: var(--header-height);
+      background-color: var(--color-base);
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 1030;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.5rem;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    /* Grupo Logo + Texto en Navbar */
+    .navbar-brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .navbar-logo-img {
+      height: var(--navbar-logo-height);
+      width: auto;
+      object-fit: contain;
+      /* Filtro para volver el logo BLANCO PURO */
+      filter: brightness(0) invert(1) drop-shadow(0 1px 2px rgba(0,0,0,0.1));
+    }
+
+    .navbar-brand-text {
+      color: white;
+      font-weight: 700;
+      font-size: 1.3rem;
+      letter-spacing: -0.5px;
+      line-height: 1;
+    }
+
+    /* --- 3. SIDEBAR (Desktop) --- */
+    .sidebar {
+      width: var(--sidebar-width);
+      position: fixed;
+      top: var(--header-height);
+      bottom: 0;
+      left: 0;
+      background: white;
+      border-right: 1px solid #e0e0e0;
+      padding-top: 1rem;
+      z-index: 1020;
+    }
+
+    .nav-link-custom {
+      display: flex;
+      align-items: center;
+      padding: 12px 24px;
+      color: #555;
+      text-decoration: none;
+      font-weight: 500;
+      border-left: 4px solid transparent;
+      transition: all 0.2s;
+    }
+    
+    .nav-link-custom:hover { background-color: #f8f9fa; color: var(--color-base); }
+    .nav-link-custom.active { 
+      background-color: rgba(85, 107, 47, 0.1); 
+      color: var(--color-base); 
+      border-left-color: var(--color-base); 
+    }
+    .nav-link-custom i { font-size: 1.2rem; margin-right: 12px; }
+
+    /* --- 4. CONTENIDO PRINCIPAL --- */
+    .main-wrapper {
+      margin-top: var(--header-height);
+      margin-left: var(--sidebar-width); /* Margen para Desktop */
+      padding: 2rem;
+      min-height: calc(100vh - var(--header-height));
+      transition: margin-left 0.3s ease;
+    }
+
+    /* --- 5. BOTTOM NAVIGATION (Móvil) --- */
+    .bottom-nav {
+      display: none; /* Oculto en PC */
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: var(--bottom-nav-height);
+      background: white;
+      box-shadow: 0 -2px 15px rgba(0,0,0,0.08);
+      z-index: 1040;
+      justify-content: space-around;
+      align-items: center;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .bottom-nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #adb5bd;
+      text-decoration: none;
+      font-size: 0.7rem;
+      width: 100%;
+      height: 100%;
+      transition: color 0.2s;
+    }
+    
+    .bottom-nav-item i { font-size: 1.4rem; margin-bottom: 2px; }
+    .bottom-nav-item.active { color: var(--color-base); font-weight: 700; }
+
+    /* --- RESPONSIVE LOGIC --- */
+    @media (max-width: 768px) {
+      .sidebar { display: none !important; } /* Ocultar Sidebar */
+      .main-wrapper { margin-left: 0; padding: 1rem; padding-bottom: 90px; } /* Quitar margen y dar espacio abajo */
+      .bottom-nav { display: flex !important; } /* Mostrar Bottom Nav */
+      .navbar-brand-text { display: none; } /* Ocultar texto Lock en móvil para ahorrar espacio si se quiere, o dejarlo */
+      .top-navbar { padding: 0 1rem; }
+    }
+
+    /* Loader */
     .loading-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(255,255,255,0.8); z-index: 9999;
+      background: rgba(255,255,255,0.85); z-index: 9999;
       display: flex; justify-content: center; align-items: center;
+      backdrop-filter: blur(2px);
     }
-    .cursor-pointer { cursor: pointer; }
-    .selected-row { background-color: rgba(85, 107, 47, 0.1) !important; }
-    .nav-tabs .nav-link.active { background-color: var(--color-base); color: white; border-color: var(--color-base); }
-    .nav-tabs .nav-link { color: var(--color-base); }
   </style>
 </head>
 <body>
 
-<div id="app" class="container-fluid p-0">
-  <div v-if="loading" class="loading-overlay">
-    <div class="spinner-grow text-expert" role="status"></div>
+<div id="app">
+
+  <div v-if="!isLoggedIn" class="login-container">
+    <div class="login-card text-center fade-in">
+      
+      <h3 class="fw-bold text-dark mb-1">Bienvenido a Lock</h3>
+      <p class="text-muted small mb-4">Gestión Integral de Proyectos</p>
+      
+      <div v-if="userEmail" class="alert alert-light border border-success text-success py-2 px-3 small rounded-pill mb-4 d-inline-flex align-items-center shadow-sm">
+        <i class="bi bi-person-check-fill me-2"></i> {{ userEmail }}
+      </div>
+      
+      <button class="btn btn-expert w-100 py-2 rounded-3 shadow fw-bold" @click="login">
+        Ingresar al Sistema
+      </button>
+      
+      <div class="mt-4 pt-3 border-top">
+        <small class="text-muted" style="font-size: 0.7rem;">v2.2.0 &bull; Jun Expert - Enterprise Edition</small>
+      </div>
+    </div>
   </div>
 
-  <nav class="navbar navbar-dark bg-expert shadow mb-3">
-    <div class="container-fluid">
-      <span class="navbar-brand mb-0 h1">🛠 Lock - Panel de Configuración</span>
-    </div>
-  </nav>
-
-  <div class="container pb-5">
-
-    <div class="alert alert-info mt-2">
-      <small>Debug Etapas: {{ etapas.length }} registros cargados.</small>
-      <details>
-        <summary>Ver datos crudos</summary>
-        <pre>{{ etapas }}</pre>
-      </details>
+  <div v-else>
+    
+    <div v-if="loading" class="loading-overlay">
+      <div class="spinner-border text-expert" role="status"></div>
     </div>
 
-    <ul class="nav nav-tabs mb-4" id="configTabs" role="tablist">
-      <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-general">⚙️ General</button></li>
-      <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-etapas">📍 Etapas y Tareas</button></li>
-      <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-profesionales">👷 Profesionales</button></li>
-      <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-checklists">📋 Checklists</button></li>
-    </ul>
+    <nav class="top-navbar">
+      <div class="navbar-brand-group">
+        <img src="https://drive.google.com/thumbnail?id=19JlPNv17CWp8RnF1bdiA7C25K2G17U11&sz=w1000" 
+             alt="Lock Logo" class="navbar-logo-img">
+        <span class="navbar-brand-text d-none d-md-block"></span>
+        <span class="navbar-brand-text d-md-none ms-2"></span> </div>
 
-    <div class="tab-content pt-2">
-      <div class="tab-pane fade show active" id="tab-general">
-        <div class="card shadow-sm border-0">
-          <div class="card-body">
-            <h5 class="card-title text-expert">Repositorio de Google Drive</h5>
-            <div class="input-group">
-              <input type="text" v-model="config.driveUrl" class="form-control" placeholder="Pega la URL de la carpeta raíz">
-              <button class="btn btn-expert" @click="saveDriveUrl">💾 Guardar Configuración</button>
-            </div>
-            <p class="small text-muted mt-2">Esta URL se utilizará para centralizar las evidencias de todos los proyectos en Lock.</p>
+      <div class="dropdown">
+        <button class="btn btn-link text-white text-decoration-none d-flex align-items-center p-0" type="button" data-bs-toggle="dropdown">
+          <div class="bg-white text-expert rounded-circle d-flex align-items-center justify-content-center fw-bold me-md-2 shadow-sm" style="width: 34px; height: 34px;">
+            {{ userInitial }}
           </div>
+          <span class="d-none d-md-block small text-white">{{ userEmail }}</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2">
+          <li><h6 class="dropdown-header">Usuario</h6></li>
+          <li><span class="dropdown-item-text small text-muted text-truncate" style="max-width: 200px;">{{ userEmail }}</span></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><button class="dropdown-item text-danger" @click="logout"><i class="bi bi-power me-2"></i>Salir</button></li>
+        </ul>
+      </div>
+    </nav>
+
+    <aside class="sidebar">
+      <nav class="d-flex flex-column h-100">
+        <div class="px-3 mb-2 small text-muted text-uppercase fw-bold" style="font-size: 0.75rem;">Navegación</div>
+        
+        <a href="#" class="nav-link-custom" :class="{ active: currentView === 'dashboard' }" @click.prevent="navigate('dashboard')">
+          <i class="bi bi-grid-1x2-fill"></i> Inicio
+        </a>
+        <a href="#" class="nav-link-custom" :class="{ active: currentView === 'projects' }" @click.prevent="navigate('projects')">
+          <i class="bi bi-building-fill-gear"></i> Proyectos
+        </a>
+        <a href="#" class="nav-link-custom" :class="{ active: currentView === 'config' }" @click.prevent="navigate('config')">
+          <i class="bi bi-sliders"></i> Configuración
+        </a>
+        
+        <div class="mt-auto p-3 border-top bg-light">
+           <div class="d-flex align-items-center small">
+             <i class="bi bi-shield-check text-success me-2 fs-5"></i>
+             <div class="text-muted lh-1">
+               <strong>Sistema Seguro</strong><br>
+               <span style="font-size: 0.7rem;">Conectado a Google Drive</span>
+             </div>
+           </div>
         </div>
+      </nav>
+    </aside>
+
+    <main class="main-wrapper">
+      
+      <div v-if="currentView === 'dashboard'" class="fade-in">
+         <h4 class="fw-bold mb-4 text-dark">Tablero de Control</h4>
+         
+         <div class="row g-3 mb-4">
+           <div class="col-12 col-md-4">
+             <div class="card border-0 shadow-sm h-100 p-3">
+               <div class="d-flex justify-content-between align-items-center">
+                 <div><h6 class="text-muted small fw-bold mb-1">PROYECTOS</h6><h2 class="text-expert fw-bold mb-0">0</h2></div>
+                 <div class="bg-light rounded p-3 text-expert"><i class="bi bi-building fs-3"></i></div>
+               </div>
+             </div>
+           </div>
+           <div class="col-12 col-md-4">
+             <div class="card border-0 shadow-sm h-100 p-3">
+               <div class="d-flex justify-content-between align-items-center">
+                 <div><h6 class="text-muted small fw-bold mb-1">PENDIENTES</h6><h2 class="text-warning fw-bold mb-0">0</h2></div>
+                 <div class="bg-light rounded p-3 text-warning"><i class="bi bi-list-task fs-3"></i></div>
+               </div>
+             </div>
+           </div>
+         </div>
+
+         <div class="card border-0 shadow-sm text-center py-5">
+            <div class="card-body">
+              <i class="bi bi-folder2-open display-4 text-muted opacity-50 mb-3 d-block"></i>
+              <h5>No hay proyectos activos</h5>
+              <button class="btn btn-expert btn-sm px-4 mt-3 rounded-pill" @click="navigate('projects')">Crear Proyecto</button>
+            </div>
+         </div>
       </div>
 
-      <div class="tab-pane fade" id="tab-etapas">
-        <div class="row">
-          <div class="col-md-7">
-            <div class="card shadow-sm border-0 h-100">
-              <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                <span class="fw-bold">Etapas del Ciclo de Vida</span>
-                <button class="btn btn-sm btn-expert" @click="openModal('etapa')">➕ Nueva</button>
-              </div>
-              <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                  <thead class="table-light"><tr><th>Orden</th><th>Etapa</th><th class="text-end px-3">Acciones</th></tr></thead>
-                  <tbody>
-                    <tr v-for="e in etapas" :key="e.id" @click="selectEtapa(e)" :class="{'selected-row': selectedEtapa?.id === e.id}" class="cursor-pointer">
-                      <td width="80" class="text-center">{{e.orden}}</td>
-                      <td><strong>{{e.nombre_etapa}}</strong></td>
-                      <td class="text-end px-3">
-                        <button class="btn btn-sm btn-link text-expert" @click.stop="openModal('etapa', e)">✏️</button>
-                        <button class="btn btn-sm btn-link text-danger" @click.stop="deleteRecord('CONF_ETAPAS', e.id)">🗑</button>
-                      </td>
-                    </tr>
-                    <tr v-if="etapas.length === 0"><td colspan="3" class="text-center py-4 text-muted">No hay etapas configuradas.</td></tr>
-                  </tbody>
-                </table>
-              </div>
+      <div v-if="currentView === 'config'" class="fade-in">
+         <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="fw-bold mb-0">Configuración</h4>
+         </div>
+         
+         <div class="card border-0 shadow-sm overflow-hidden">
+            <div class="card-header bg-white p-0 border-bottom">
+               <ul class="nav nav-tabs nav-fill border-0" id="configTabs">
+                  <li class="nav-item"><button class="nav-link rounded-0 py-3 active" data-bs-toggle="tab" data-bs-target="#tab-general">General</button></li>
+                  <li class="nav-item"><button class="nav-link rounded-0 py-3" data-bs-toggle="tab" data-bs-target="#tab-etapas">Etapas</button></li>
+                  <li class="nav-item"><button class="nav-link rounded-0 py-3" data-bs-toggle="tab" data-bs-target="#tab-profesionales">Equipo</button></li>
+                  <li class="nav-item"><button class="nav-link rounded-0 py-3" data-bs-toggle="tab" data-bs-target="#tab-checklists">Checklists</button></li>
+               </ul>
             </div>
-          </div>
-          <div class="col-md-5">
-            <div v-if="selectedEtapa" class="card shadow-sm border-expert h-100">
-              <div class="card-header bg-expert d-flex justify-content-between align-items-center">
-                <span class="small fw-bold">Tareas: {{selectedEtapa.nombre_etapa}}</span>
-                <button class="btn btn-sm btn-light py-0" @click="addTarea">➕ Añadir</button>
-              </div>
-              <div class="card-body">
-                <div v-for="(t, i) in tareasFiltradas" :key="i" class="mb-2 p-2 border rounded bg-light shadow-sm">
-                  <div class="input-group input-group-sm mb-1">
-                    <input type="text" v-model="t.nombre_tarea" class="form-control" placeholder="Nombre tarea">
-                    <button class="btn btn-outline-danger" @click="removeTareaLocal(i, t.id)">✕</button>
+            <div class="card-body bg-light">
+               <div class="tab-content">
+                  <div class="tab-pane fade show active" id="tab-general">
+                     <div class="bg-white p-4 rounded shadow-sm">
+                        <label class="form-label fw-bold">Repositorio Drive (URL)</label>
+                        <div class="input-group">
+                           <input type="text" v-model="config.driveUrl" class="form-control" placeholder="https://drive.google.com...">
+                           <button class="btn btn-expert" @click="saveDriveUrl">Guardar</button>
+                        </div>
+                     </div>
                   </div>
-                  <div class="form-check form-switch"><input class="form-check-input" type="checkbox" v-model="t.requiere_evidencia"><label class="small">Evidencia obligatoria</label></div>
-                </div>
-                <button v-if="tareasFiltradas.length" class="btn btn-expert w-100 mt-2" @click="saveTareasBatch">💾 Guardar Tareas</button>
-              </div>
+                  <div class="tab-pane fade" id="tab-etapas">
+                     <div class="bg-white rounded shadow-sm p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                           <h6 class="mb-0 fw-bold">Etapas</h6>
+                           <button class="btn btn-sm btn-expert rounded-pill px-3" @click="openModal('etapa')">+ Crear</button>
+                        </div>
+                        <div class="table-responsive">
+                           <table class="table table-hover align-middle mb-0">
+                              <thead class="table-light small"><tr><th>Orden</th><th>Nombre</th><th class="text-end">Acción</th></tr></thead>
+                              <tbody>
+                                 <tr v-for="e in etapas" :key="e.id">
+                                    <td><span class="badge bg-light text-dark border">{{e.orden}}</span></td>
+                                    <td><span class="d-inline-block rounded-circle me-2" :style="{width:'10px', height:'10px', backgroundColor: e.color_hex}"></span>{{e.nombre_etapa}}</td>
+                                    <td class="text-end"><button class="btn btn-sm text-danger" @click="deleteRecord('CONF_ETAPAS', e.id)"><i class="bi bi-trash"></i></button></td>
+                                 </tr>
+                              </tbody>
+                           </table>
+                        </div>
+                     </div>
+                  </div>
+                  <div class="tab-pane fade" id="tab-profesionales">
+                    <div class="bg-white rounded shadow-sm">
+                      <div class="p-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div class="d-flex align-items-center">
+                          <h6 class="mb-0 fw-bold me-3">Equipo de Trabajo</h6>
+                          <div class="btn-group btn-group-sm">
+                            <input type="radio" class="btn-check" name="statusFilter" id="showAll" autocomplete="off" checked @click="filterStatus = 'all'">
+                            <label class="btn btn-outline-secondary" for="showAll">Todos</label>
+                            <input type="radio" class="btn-check" name="statusFilter" id="showActive" autocomplete="off" @click="filterStatus = 'Activo'">
+                            <label class="btn btn-outline-secondary" for="showActive">Activos</label>
+                          </div>
+                        </div>
+                        <button class="btn btn-sm btn-expert rounded-pill px-3 shadow-sm" @click="openModal('profesional')">
+                          <i class="bi bi-person-plus-fill me-1"></i> Nuevo Miembro
+                        </button>
+                      </div>
+
+                      <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                          <thead class="table-light small text-muted text-uppercase">
+                            <tr>
+                              <th class="ps-3">Profesional</th>
+                              <th>Rol / Especialidad</th>
+                              <th>Contacto</th>
+                              <th>Valor Hora</th>
+                              <th class="text-center">Estado</th>
+                              <th class="text-end pe-3">Acciones</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr v-for="p in profesionalesFiltrados" :key="p.id">
+                              <td class="ps-3">
+                                <div class="d-flex align-items-center">
+                                  <div class="rounded-circle bg-light text-expert d-flex align-items-center justify-content-center fw-bold me-3 border" 
+                                      style="width: 40px; height: 40px; font-size: 0.9rem;">
+                                    {{ p.nombre_completo.charAt(0).toUpperCase() }}
+                                  </div>
+                                  <div>
+                                    <div class="fw-bold text-dark">{{ p.nombre_completo }}</div>
+                                    <div class="small text-muted" style="font-size: 0.75rem;">ID: ...{{ p.id.substr(-4) }}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td>
+                                <span class="badge bg-expert bg-opacity-10 text-expert border border-expert border-opacity-25 mb-1">
+                                  {{ p.rol || 'Sin Rol' }}
+                                </span>
+                                <div class="small text-muted">{{ p.especialidad }}</div>
+                              </td>
+                              <td>
+                                <div class="d-flex flex-column small">
+                                  <span v-if="p.email"><i class="bi bi-envelope me-1 text-muted"></i> {{ p.email }}</span>
+                                  <span v-if="p.telefono"><i class="bi bi-whatsapp me-1 text-success"></i> {{ p.telefono }}</span>
+                                </div>
+                              </td>
+                              <td>
+                                <span class="fw-bold text-dark">{{ formatCurrency(p.costo_hora) }}</span>
+                              </td>
+                              <td class="text-center">
+                                <span class="badge rounded-pill" 
+                                      :class="p.estado === 'Activo' ? 'bg-success' : 'bg-secondary'">
+                                  {{ p.estado || 'Activo' }}
+                                </span>
+                              </td>
+                              <td class="text-end pe-3">
+                                <button class="btn btn-sm btn-link text-expert p-1" @click="openModal('profesional', p)" title="Editar">
+                                  <i class="bi bi-pencil-square"></i>
+                                </button>
+                                <button v-if="p.estado === 'Activo'" class="btn btn-sm btn-link text-warning p-1" @click="toggleStatus(p)" title="Desactivar">
+                                  <i class="bi bi-pause-circle"></i>
+                                </button>
+                                <button v-else class="btn btn-sm btn-link text-danger p-1" @click="deleteRecord('CONF_PROFESIONALES', p.id)" title="Eliminar Definitivamente">
+                                  <i class="bi bi-trash"></i>
+                                </button>
+                              </td>
+                            </tr>
+                            <tr v-if="profesionalesFiltrados.length === 0">
+                              <td colspan="6" class="text-center py-5 text-muted">
+                                <i class="bi bi-people display-4 opacity-25"></i>
+                                <p class="mt-2">No se encontraron profesionales con este criterio.</p>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="tab-pane fade" id="tab-checklists">
+                    <div class="bg-white rounded shadow-sm">
+                      <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+                        <div>
+                          <h6 class="mb-0 fw-bold">Protocolos de Calidad</h6>
+                          <small class="text-muted">Define las listas de verificación para cada etapa.</small>
+                        </div>
+                        <button class="btn btn-sm btn-expert rounded-pill px-3 shadow-sm" @click="openModal('checklist')">
+                          <i class="bi bi-ui-checks me-1"></i> Nuevo Checklist
+                        </button>
+                      </div>
+
+                      <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                          <thead class="table-light small text-muted text-uppercase">
+                            <tr>
+                              <th class="ps-4">Nombre del Protocolo</th>
+                              <th>Complejidad</th>
+                              <th>Última Edición</th>
+                              <th class="text-end pe-4">Acciones</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr v-for="c in checklists" :key="c.id">
+                              <td class="ps-4">
+                                <div class="d-flex align-items-center">
+                                  <div class="bg-light text-expert rounded p-2 me-3 border">
+                                    <i class="bi bi-clipboard-check fs-5"></i>
+                                  </div>
+                                  <strong>{{ c.nombre_checklist }}</strong>
+                                </div>
+                              </td>
+                              <td>
+                                <span class="badge bg-secondary bg-opacity-10 text-secondary border">
+                                  {{ parseJson(c.config_json).length }} Puntos de control
+                                </span>
+                              </td>
+                              <td class="small text-muted">
+                                {{ new Date(c.created_at).toLocaleDateString() }}
+                              </td>
+                              <td class="text-end pe-4">
+                                <button class="btn btn-sm btn-link text-expert p-1" @click="openModal('checklist', c)" title="Editar estructura">
+                                  <i class="bi bi-pencil-square"></i>
+                                </button>
+                                <button class="btn btn-sm btn-link text-danger p-1" @click="deleteRecord('CONF_CHECKLISTS', c.id)" title="Eliminar">
+                                  <i class="bi bi-trash"></i>
+                                </button>
+                              </td>
+                            </tr>
+                            <tr v-if="checklists.length === 0">
+                              <td colspan="4" class="text-center py-5 text-muted">
+                                <i class="bi bi-clipboard-x display-4 opacity-25"></i>
+                                <p class="mt-2">No hay checklists configurados.</p>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+               </div>
             </div>
-            <div v-else class="card h-100 d-flex align-items-center justify-content-center border-0 bg-light text-muted">
-              <small>Selecciona una etapa para gestionar sus tareas</small>
-            </div>
-          </div>
-        </div>
+         </div>
       </div>
 
-      <div class="tab-pane fade" id="tab-profesionales">
-        <div class="card shadow-sm border-0">
-          <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <span class="fw-bold">Maestro de Profesionales / Técnicos</span>
-            <button class="btn btn-sm btn-expert" @click="openModal('profesional')">➕ Nuevo</button>
-          </div>
-          <div class="table-responsive">
-            <table class="table table-hover mb-0">
-              <thead class="table-light"><tr><th>Nombre</th><th>Especialidad</th><th>Email</th><th class="text-end px-3">Acciones</th></tr></thead>
-              <tbody>
-                <tr v-for="p in profesionales" :key="p.id">
-                  <td>{{p.nombre_completo}}</td>
-                  <td>{{p.especialidad}}</td>
-                  <td>{{p.email}}</td>
-                  <td class="text-end px-3">
-                    <button class="btn btn-sm btn-link text-expert" @click="openModal('profesional', p)">✏️</button>
-                    <button class="btn btn-sm btn-link text-danger" @click="deleteRecord('CONF_PROFESIONALES', p.id)">🗑</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+      <div v-if="currentView === 'projects'" class="fade-in">
+         <div class="text-center py-5 mt-4">
+            <i class="bi bi-cone-striped text-warning display-1"></i>
+            <h3 class="mt-3">Módulo de Proyectos</h3>
+            <p class="text-muted">En construcción...</p>
+         </div>
       </div>
+    </main>
 
-      <div class="tab-pane fade" id="tab-checklists">
-        <div class="card shadow-sm border-0">
-          <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <span class="fw-bold">Maestro de Checklists Dinámicos</span>
-            <button class="btn btn-sm btn-expert" @click="openModal('checklist')">➕ Nuevo</button>
-          </div>
-          <div class="table-responsive">
-            <table class="table table-hover mb-0">
-              <thead class="table-light"><tr><th>Nombre Checklist</th><th>Ítems</th><th class="text-end px-3">Acciones</th></tr></thead>
-              <tbody>
-                <tr v-for="c in checklists" :key="c.id">
-                  <td><strong>{{c.nombre_checklist}}</strong></td>
-                  <td><span class="badge bg-secondary">{{ parseJson(c.config_json).length }} campos</span></td>
-                  <td class="text-end px-3">
-                    <button class="btn btn-sm btn-link text-expert" @click="openModal('checklist', c)">✏️</button>
-                    <button class="btn btn-sm btn-link text-danger" @click="deleteRecord('CONF_CHECKLISTS', c.id)">🗑</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
+    <nav class="bottom-nav">
+      <a href="#" class="bottom-nav-item" :class="{ active: currentView === 'dashboard' }" @click.prevent="navigate('dashboard')">
+        <i class="bi" :class="currentView === 'dashboard' ? 'bi-grid-1x2-fill' : 'bi-grid-1x2'"></i>
+        <span>Inicio</span>
+      </a>
+      <a href="#" class="bottom-nav-item" :class="{ active: currentView === 'projects' }" @click.prevent="navigate('projects')">
+        <i class="bi" :class="currentView === 'projects' ? 'bi-building-fill-gear' : 'bi-building-gear'"></i>
+        <span>Proyectos</span>
+      </a>
+      <a href="#" class="bottom-nav-item" :class="{ active: currentView === 'config' }" @click.prevent="navigate('config')">
+        <i class="bi" :class="currentView === 'config' ? 'bi-sliders' : 'bi-sliders2'"></i>
+        <span>Ajustes</span>
+      </a>
+    </nav>
   </div>
 
   <div class="modal fade" id="modal-etapa" tabindex="-1">
-    <div class="modal-dialog"><div class="modal-content border-0 shadow">
-      <div class="modal-header bg-expert"><h5 class="modal-title">Gestión de Etapa</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body">
-        <div class="mb-3"><label class="form-label fw-bold small">Nombre de la Etapa</label><input type="text" v-model="form.nombre_etapa" class="form-control"></div>
-        <div class="row"><div class="col-6"><label class="form-label fw-bold small">Orden Flujo</label><input type="number" v-model="form.orden" class="form-control"></div>
-        <div class="col-6"><label class="form-label fw-bold small">Color Distintivo</label><input type="color" v-model="form.color_hex" class="form-control form-control-color w-100"></div></div>
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content border-0 shadow">
+      <div class="modal-header bg-expert text-white"><h5 class="modal-title fs-6">Nueva Etapa</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body bg-light">
+        <div class="mb-3"><label class="form-label small fw-bold">Nombre</label><input type="text" v-model="form.nombre_etapa" class="form-control"></div>
+        <div class="row">
+           <div class="col-6"><label class="form-label small fw-bold">Orden</label><input type="number" v-model="form.orden" class="form-control"></div>
+           <div class="col-6"><label class="form-label small fw-bold">Color</label><input type="color" v-model="form.color_hex" class="form-control w-100 h-75"></div>
+        </div>
       </div>
-      <div class="modal-footer bg-light"><button class="btn btn-expert px-4" @click="saveGeneric('CONF_ETAPAS')">💾 Guardar</button></div>
+      <div class="modal-footer border-0 bg-white"><button class="btn btn-expert w-100 rounded-pill" @click="saveGeneric('CONF_ETAPAS')">Guardar</button></div>
     </div></div>
   </div>
 
   <div class="modal fade" id="modal-profesional" tabindex="-1">
-    <div class="modal-dialog"><div class="modal-content border-0 shadow">
-      <div class="modal-header bg-expert"><h5 class="modal-title">Perfil de Profesional</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body">
-        <div class="mb-3"><label class="form-label fw-bold small">Nombre Completo</label><input type="text" v-model="form.nombre_completo" class="form-control"></div>
-        <div class="mb-3"><label class="form-label fw-bold small">Especialidad / Cargo</label><input type="text" v-model="form.especialidad" class="form-control"></div>
-        <div class="mb-3"><label class="form-label fw-bold small">Correo Electrónico</label><input type="email" v-model="form.email" class="form-control"></div>
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-expert text-white">
+          <h5 class="modal-title fs-6">
+            <i class="bi bi-person-badge me-2"></i>
+            {{ form.id ? 'Editar Profesional' : 'Nuevo Miembro del Equipo' }}
+          </h5>
+          <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        
+        <div class="modal-body bg-light">
+          <div class="row g-2 mb-3">
+            <div class="col-12">
+              <label class="form-label small fw-bold text-muted">Nombre Completo *</label>
+              <input type="text" v-model="form.nombre_completo" class="form-control" placeholder="Ej: Arq. Juan Pérez">
+            </div>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label small fw-bold text-muted">Rol en Obra *</label>
+              <select v-model="form.rol" class="form-select">
+                <option value="" disabled>Seleccione...</option>
+                <option value="Director de Obra">Director de Obra</option>
+                <option value="Residente">Residente</option>
+                <option value="Arquitecto">Arquitecto</option>
+                <option value="Ingeniero">Ingeniero</option>
+                <option value="Capataz">Capataz</option>
+                <option value="Administrativo">Administrativo</option>
+                <option value="Contratista">Contratista</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-bold text-muted">Especialidad</label>
+              <input type="text" v-model="form.especialidad" class="form-control" placeholder="Ej: Estructuras">
+            </div>
+          </div>
+
+          <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body p-3">
+              <h6 class="card-subtitle mb-2 text-muted small fw-bold"><i class="bi bi-person-lines-fill me-1"></i> Contacto</h6>
+              <div class="row g-2">
+                <div class="col-6">
+                  <label class="small text-muted">Email</label>
+                  <input type="email" v-model="form.email" class="form-control form-control-sm">
+                </div>
+                <div class="col-6">
+                  <label class="small text-muted">Teléfono / WhatsApp</label>
+                  <input type="text" v-model="form.telefono" class="form-control form-control-sm" placeholder="+595 9...">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-2 align-items-end">
+            <div class="col-6">
+              <label class="form-label small fw-bold text-muted">Costo Hora Est.</label>
+              <div class="input-group">
+                <span class="input-group-text bg-white border-end-0">$</span>
+                <input type="number" v-model="form.costo_hora" class="form-control border-start-0" placeholder="0.00">
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="estadoSwitch" 
+                        v-model="form.estado" true-value="Activo" false-value="Inactivo">
+                <label class="form-check-label small" for="estadoSwitch">
+                  Estado: <strong>{{ form.estado || 'Activo' }}</strong>
+                </label>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        
+        <div class="modal-footer border-0 bg-white">
+          <button class="btn btn-expert w-100 rounded-pill shadow-sm" @click="saveGeneric('CONF_PROFESIONALES')">
+            <i class="bi bi-save me-2"></i> Guardar Ficha
+          </button>
+        </div>
       </div>
-      <div class="modal-footer bg-light"><button class="btn btn-expert px-4" @click="saveGeneric('CONF_PROFESIONALES')">💾 Guardar</button></div>
-    </div></div>
+    </div>
   </div>
 
   <div class="modal fade" id="modal-checklist" tabindex="-1">
-    <div class="modal-dialog modal-lg"><div class="modal-content border-0 shadow">
-      <div class="modal-header bg-expert"><h5 class="modal-title">Configurador de Checklist</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body">
-        <div class="mb-3"><label class="form-label fw-bold small">Nombre del Formulario</label><input type="text" v-model="form.nombre_checklist" class="form-control" placeholder="Ej: Acta de Recepción"></div>
-        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
-           <h6 class="mb-0">Elementos de Inspección</h6>
-           <button class="btn btn-sm btn-outline-expert" @click="addChecklistItem">➕ Añadir Item</button>
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-expert text-white">
+          <h5 class="modal-title fs-6">
+            <i class="bi bi-list-task me-2"></i>Configurador de Checklist
+          </h5>
+          <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
-        <div id="sortable-items">
-          <div v-for="(it, idx) in form.items" :key="idx" class="card mb-2 bg-light border-0 shadow-sm item-drag">
-            <div class="card-body p-2 d-flex align-items-center">
-              <span class="me-3 text-muted cursor-pointer">☰</span>
-              <input type="text" v-model="it.label" class="form-control form-control-sm me-2" placeholder="Pregunta o punto a verificar">
-              <select v-model="it.type" class="form-select form-select-sm w-auto me-2">
-                 <option value="checkvalue">Checkbox</option>
-                 <option value="radiobutton">Opciones Si/No</option>
-              </select>
-              <button class="btn btn-sm text-danger" @click="form.items.splice(idx,1)">✕</button>
+        
+        <div class="modal-body bg-light">
+          <div class="bg-white p-3 rounded shadow-sm mb-3">
+            <label class="form-label small fw-bold text-muted">Título del Protocolo</label>
+            <input type="text" v-model="form.nombre_checklist" class="form-control" placeholder="Ej: Inspección de Cimentación">
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.7rem;">Ítems de Verificación (Arrastra para ordenar)</small>
+            <button class="btn btn-sm btn-outline-expert rounded-pill" @click="addChecklistItem">
+              <i class="bi bi-plus-lg"></i> Agregar Ítem
+            </button>
+          </div>
+
+          <div id="sortable-items" class="d-flex flex-column gap-2 pb-3">
+            
+            <div v-for="(item, idx) in form.items" :key="idx" class="card border-0 shadow-sm item-drag">
+              <div class="card-body p-2 d-flex align-items-center bg-white rounded">
+                
+                <div class="me-3 text-muted cursor-move handle px-2" style="cursor: grab;">
+                  <i class="bi bi-grip-vertical"></i>
+                </div>
+                
+                <div class="flex-grow-1 row g-2 align-items-center">
+                  <div class="col-md-7">
+                    <input type="text" v-model="item.label" class="form-control form-control-sm border-0 bg-light" placeholder="Escribe la pregunta o verificación...">
+                  </div>
+                  <div class="col-md-4">
+                    <select v-model="item.type" class="form-select form-select-sm border-0 bg-light text-muted">
+                      <option value="checkvalue">☑ Checkbox Simple</option>
+                      <option value="radiobutton">◉ Opciones (Si/No/NA)</option>
+                      <option value="text">✎ Texto Libre</option>
+                      <option value="photo">📷 Foto Obligatoria</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button class="btn btn-sm text-danger ms-2" @click="form.items.splice(idx, 1)" title="Quitar ítem">
+                  <i class="bi bi-x-circle-fill"></i>
+                </button>
+              </div>
             </div>
+
+            <div v-if="!form.items || form.items.length === 0" class="text-center py-4 border dashed rounded text-muted">
+              <i class="bi bi-arrow-up-circle fs-4"></i>
+              <p class="small mb-0">Agrega ítems para construir el checklist.</p>
+            </div>
+
           </div>
         </div>
-        <div v-if="!form.items?.length" class="text-center py-4 text-muted small">Haz clic en "Añadir Item" para definir el checklist.</div>
+        
+        <div class="modal-footer border-0 bg-white">
+          <button class="btn btn-expert w-100 rounded-pill shadow-sm" @click="saveChecklist">
+            <i class="bi bi-save me-2"></i> Guardar Protocolo
+          </button>
+        </div>
       </div>
-      <div class="modal-footer bg-light"><button class="btn btn-expert px-4" @click="saveChecklist">💾 Guardar en Lock</button></div>
-    </div></div>
+    </div>
   </div>
 
 </div>
 
 <script>
-  const { createApp, ref, onMounted, nextTick } = Vue;
+  const { createApp, ref, computed, onMounted, nextTick } = Vue;
 
   createApp({
     setup() {
+      // --- ESTADO UI ---
+      const isLoggedIn = ref(false);
       const loading = ref(false);
+      const currentView = ref('dashboard');
+      const userEmail = ref('');
+      
+      // --- DATOS DE NEGOCIO ---
       const config = ref({ driveUrl: '' });
       const etapas = ref([]);
-      const profesionales = ref([]);
-      const checklists = ref([]);
-      const selectedEtapa = ref(null);
-      const tareasFiltradas = ref([]);
+      const profesionales = ref([]); 
+      const checklists = ref([]); // NUEVO: Inicializamos array de checklists
       const form = ref({});
+      
+      // --- FILTROS Y UI ---
+      const filterStatus = ref('all');
       let modales = {};
 
-      // FUNCIÓN DE CARGA ROBUSTA (Corregida)
-      const init = async () => {
+      // --- COMPUTED PROPERTIES ---
+      const userInitial = computed(() => userEmail.value ? userEmail.value[0].toUpperCase() : 'U');
+      
+      const profesionalesFiltrados = computed(() => {
+        if (!profesionales.value) return [];
+        if (filterStatus.value === 'all') return profesionales.value;
+        return profesionales.value.filter(p => p.estado === filterStatus.value);
+      });
+
+      // --- ACCIONES DE SESIÓN ---
+      const login = () => {
+        loading.value = true;
+        google.script.run.withSuccessHandler(userInfo => {
+          userEmail.value = userInfo.email;
+          isLoggedIn.value = true;
+          loading.value = false;
+          loadData();
+        }).getUserInfo();
+      };
+
+      const logout = () => {
+         isLoggedIn.value = false;
+         currentView.value = 'dashboard';
+      };
+
+      const navigate = (view) => {
+        currentView.value = view;
+        if(view === 'config') loadData();
+      };
+
+      // --- CARGA DE DATOS (BACKEND) ---
+      const loadData = async () => {
+        if(currentView.value !== 'config') return;
+        
         loading.value = true;
         try {
-          const load = (sheet) => new Promise((resolve) => {
-            google.script.run
-              .withSuccessHandler(res => resolve(res || []))
-              .withFailureHandler(err => {
-                console.error(`Error cargando ${sheet}:`, err);
-                resolve([]);
-              })
-              .readConfig(sheet);
-          });
-          
-          const [resEtapas, resProfesionales, resChecklists, resGen] = await Promise.all([
-            load("CONF_ETAPAS"),
-            load("CONF_PROFESIONALES"),
-            load("CONF_CHECKLISTS"),
-            load("CONF_GENERAL")
-          ]);
+           const load = (s) => new Promise(r => google.script.run.withSuccessHandler(res => r(res||[])).readConfig(s));
+           
+           // CARGA PARALELA (Incluyendo Checklists)
+           const [resEtapas, resProf, resCheck, resGen] = await Promise.all([
+             load("CONF_ETAPAS"),
+             load("CONF_PROFESIONALES"),
+             load("CONF_CHECKLISTS"), // Cargamos checklists
+             load("CONF_GENERAL")
+           ]);
+           
+           etapas.value = resEtapas.sort((a,b) => (Number(a.orden)||0)-(Number(b.orden)||0));
+           profesionales.value = resProf;
+           checklists.value = resCheck; // Asignamos checklists
+           
+           const driveData = Array.isArray(resGen) ? resGen : [];
+           const dUrl = driveData.find(p => p.parametro === 'DRIVE_ROOT_FOLDER_URL');
+           config.value.driveUrl = dUrl ? dUrl.valor : '';
 
-          etapas.value = resEtapas.sort((a,b) => (Number(a.orden) || 0) - (Number(b.orden) || 0));
-          profesionales.value = resProfesionales;
-          checklists.value = resChecklists;
-          
-          // Validación segura para evitar el error de puntero nulo en find
-          const driveData = Array.isArray(resGen) ? resGen : [];
-          const driveParam = driveData.find(p => p.parametro === 'DRIVE_ROOT_FOLDER_URL');
-          config.value.driveUrl = driveParam ? driveParam.valor : '';
-          
-        } catch (error) {
-          console.error("Error crítico en init:", error);
-          Swal.fire('Lock - Error', 'Falla de comunicación con el servidor.', 'error');
-        } finally {
-          loading.value = false;
+        } catch(e) { 
+          console.error("Error en loadData:", e);
+          Swal.fire('Error', 'No se pudieron cargar los datos.', 'error');
+        } finally { 
+          loading.value = false; 
         }
       };
 
-      const openModal = (type, data = null) => {
-        if(type === 'checklist') {
-          form.value = data ? { ...data, items: JSON.parse(data.config_json || '[]') } : { nombre_checklist: '', items: [] };
-          nextTick(initSortable);
-        } else if (type === 'etapa') {
-          form.value = data ? { ...data } : { nombre_etapa: '', orden: etapas.value.length + 1, color_hex: '#556B2F' };
-        } else {
-          form.value = data ? { ...data } : { nombre_completo: '', especialidad: '', email: '' };
-        }
-        modales[type].show();
+      // --- GESTIÓN DE MODALES Y LOGICA CHECKLIST ---
+      
+      // 1. Helper para JSON seguro
+      const parseJson = (str) => {
+        try { return JSON.parse(str || '[]'); } 
+        catch(e) { return []; }
       };
 
-      const initSortable = () => {
-        const el = document.getElementById('sortable-items');
-        if(el) Sortable.create(el, { 
-          animation: 150, 
-          handle: '.cursor-pointer',
-          onEnd: (evt) => {
-            const item = form.value.items.splice(evt.oldIndex, 1)[0];
-            form.value.items.splice(evt.newIndex, 0, item);
-          }
+      // 2. Agregar item al checklist
+      const addChecklistItem = () => {
+        if (!form.value.items) form.value.items = [];
+        form.value.items.push({ label: '', type: 'checkvalue' });
+        
+        // Scroll al fondo
+        nextTick(() => {
+          const container = document.getElementById('sortable-items');
+          if(container) container.scrollTop = container.scrollHeight;
         });
       };
 
-      const saveGeneric = (sheet) => {
-        loading.value = true;
-        google.script.run
-          .withSuccessHandler((response) => {
-            // 1. Cerramos los modales
-            Object.values(modales).forEach(m => m.hide());
+      // 3. Abrir Modales
+      const openModal = (type, data = null) => {
+         // Lógica Modal Etapa
+         if (type === 'etapa') {
+            form.value = data ? { ...data } : { nombre_etapa: '', orden: etapas.value.length + 1, color_hex: '#556B2F' };
+         } 
+         // Lógica Modal Profesional
+         else if (type === 'profesional') {
+            form.value = data ? { ...data } : { 
+              nombre_completo: '', rol: '', especialidad: '', 
+              email: '', telefono: '', costo_hora: 0, estado: 'Activo' 
+            };
+         }
+         // Lógica Modal Checklist (NUEVO)
+         else if (type === 'checklist') {
+            const items = data ? parseJson(data.config_json) : [];
+            form.value = data ? { ...data, items } : { nombre_checklist: '', items: [] };
             
-            // 2. IMPORTANTE: Forzamos la recarga de datos desde Sheets
-            init().then(() => {
-              loading.value = false;
-              Swal.fire('Guardado', 'Los datos se han actualizado en Lock.', 'success');
+            // Inicializar SortableJS después de que el DOM se actualice
+            nextTick(() => {
+               const el = document.getElementById('sortable-items');
+               if (el) {
+                  // Destruir instancia previa si existe para evitar conflictos
+                  // (Sortable maneja esto bien, pero por seguridad reinicializamos)
+                  Sortable.create(el, {
+                     animation: 150,
+                     handle: '.handle', // Arrastrar solo desde el icono
+                     ghostClass: 'bg-light',
+                     onEnd: (evt) => {
+                        const item = form.value.items.splice(evt.oldIndex, 1)[0];
+                        form.value.items.splice(evt.newIndex, 0, item);
+                     }
+                  });
+               }
             });
-          })
-          .withFailureHandler(err => {
-            loading.value = false;
-            Swal.fire('Error', 'No se pudo guardar: ' + err, 'error');
-          })
-          .saveConfigRecord(sheet, form.value);
+         }
+
+         if(modales[type]) modales[type].show();
       };
 
+      // 4. Guardado específico de Checklist
       const saveChecklist = () => {
-        form.value.config_json = JSON.stringify(form.value.items || []);
+        if (!form.value.nombre_checklist) return Swal.fire('Atención', 'Ponle un nombre al protocolo.', 'warning');
+        if (!form.value.items || form.value.items.length === 0) return Swal.fire('Atención', 'Agrega al menos un ítem.', 'warning');
+
+        // Serializar a JSON
+        form.value.config_json = JSON.stringify(form.value.items);
         saveGeneric('CONF_CHECKLISTS');
       };
 
-      const deleteRecord = (sheet, id) => {
-        Swal.fire({ 
-           title: '¿Confirmar eliminación?', 
-           text: 'Esta acción no se puede deshacer.',
-           icon: 'warning', 
-           showCancelButton: true, 
-           confirmButtonColor: '#d33',
-           confirmButtonText: 'Sí, eliminar'
-        }).then(r => {
-          if(r.isConfirmed) {
-            loading.value = true;
-            google.script.run.withSuccessHandler(() => {
-               if(sheet === 'CONF_ETAPAS' && selectedEtapa.value?.id === id) selectedEtapa.value = null;
-               init();
-            }).deleteConfigRecord(sheet, id);
-          }
-        });
-      };
-
-      const selectEtapa = (e) => {
-        selectedEtapa.value = e;
-        loading.value = true;
-        google.script.run.withSuccessHandler(data => { 
-          tareasFiltradas.value = Array.isArray(data) ? data : []; 
-          loading.value = false; 
-        }).getTareasByEtapa(e.id);
-      };
-
-      const addTarea = () => {
-        if(!selectedEtapa.value) return;
-        tareasFiltradas.value.push({ etapa_id: selectedEtapa.value.id, nombre_tarea: '', requiere_evidencia: false });
-      };
-
-      const saveTareasBatch = async () => {
-        loading.value = true;
-        try {
-          // Usamos un bucle for...of para asegurar que termine de guardar todo
-          for(let t of tareasFiltradas.value) {
-            await new Promise((resolve, reject) => {
-              google.script.run
-                .withSuccessHandler(resolve)
-                .withFailureHandler(reject)
-                .saveConfigRecord("CONF_TAREAS", t);
-            });
-          }
-          
-          // 3. REFRESCO CLAVE: Volvemos a pedir las tareas de la etapa actual
-          if (selectedEtapa.value) {
-            selectEtapa(selectedEtapa.value); 
-          }
-          
-          Swal.fire('Tareas Actualizadas', 'Se guardaron los cambios en el ciclo de vida.', 'success');
-        } catch(e) {
-          Swal.fire('Error', 'Falla al guardar tareas masivamente.', 'error');
-        } finally {
-          loading.value = false;
-        }
+      // --- MÉTODOS GENÉRICOS ---
+      const saveGeneric = (sheet) => {
+         loading.value = true;
+         google.script.run.withSuccessHandler(() => {
+            Object.values(modales).forEach(m => m.hide());
+            loadData();
+            Swal.fire({ title: 'Guardado', icon: 'success', timer: 1500, showConfirmButton: false });
+         }).saveConfigRecord(sheet, form.value);
       };
 
       const saveDriveUrl = () => {
-        if(!config.value.driveUrl.includes('drive.google.com')) {
-          return Swal.fire('Error', 'Ingresa una URL de Google Drive válida.', 'error');
-        }
+         loading.value = true;
+         google.script.run.withSuccessHandler(() => {
+            loading.value = false;
+            Swal.fire('Guardado', 'Repositorio actualizado', 'success');
+         }).updateDriveUrl(config.value.driveUrl);
+      };
+      
+      const deleteRecord = (sheet, id) => {
+         Swal.fire({ title: '¿Eliminar?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then(r => {
+            if(r.isConfirmed) {
+               loading.value = true;
+               google.script.run.withSuccessHandler(loadData).deleteConfigRecord(sheet, id);
+            }
+         });
+      };
+      
+      const toggleStatus = (p) => {
+        let updatedP = { ...p, estado: 'Inactivo' };
         loading.value = true;
-        google.script.run.withSuccessHandler(() => { 
-          loading.value = false; 
-          Swal.fire('Drive Configurado', 'Repositorio central de Lock actualizado.', 'success'); 
-        }).updateDriveUrl(config.value.driveUrl);
+        google.script.run.withSuccessHandler(() => {
+          loadData();
+          Swal.fire('Archivado', 'Profesional desactivado.', 'info');
+        }).saveConfigRecord('CONF_PROFESIONALES', updatedP);
       };
 
+      const formatCurrency = (value) => {
+        if (!value) return '-';
+        return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG' }).format(value);
+      };
+
+      // --- ON MOUNTED ---
       onMounted(() => {
-        modales.etapa = new bootstrap.Modal(document.getElementById('modal-etapa'));
-        modales.profesional = new bootstrap.Modal(document.getElementById('modal-profesional'));
-        modales.checklist = new bootstrap.Modal(document.getElementById('modal-checklist'));
-        init();
+         const elEtapa = document.getElementById('modal-etapa');
+         if(elEtapa) modales.etapa = new bootstrap.Modal(elEtapa);
+         
+         const elProf = document.getElementById('modal-profesional');
+         if(elProf) modales.profesional = new bootstrap.Modal(elProf);
+         
+         // NUEVO: Inicializar modal de checklist
+         const elCheck = document.getElementById('modal-checklist');
+         if(elCheck) modales.checklist = new bootstrap.Modal(elCheck);
       });
 
-      return { 
-        loading, config, etapas, profesionales, checklists, selectedEtapa, tareasFiltradas, form,
-        saveDriveUrl, openModal, saveGeneric, saveChecklist, deleteRecord, selectEtapa, addTarea, saveTareasBatch,
-        addChecklistItem: () => { if(!form.value.items) form.value.items = []; form.value.items.push({label:'', type:'checkvalue'}); },
-        parseJson: (s) => { try{ return JSON.parse(s || '[]'); }catch(e){ return []; } },
-        removeTareaLocal: (idx, id) => { 
-           if(!id) return tareasFiltradas.value.splice(idx, 1); 
-           deleteRecord('CONF_TAREAS', id); 
-        }
+      return {
+        isLoggedIn, loading, currentView, userEmail, userInitial,
+        config, etapas, profesionales, checklists, form, // Datos expuestos
+        filterStatus, profesionalesFiltrados,
+        login, logout, navigate,
+        saveDriveUrl, openModal, saveGeneric, deleteRecord,
+        toggleStatus, formatCurrency,
+        // Funciones de Checklist expuestas
+        parseJson, addChecklistItem, saveChecklist
       };
     }
   }).mount('#app');
 </script>
+
 </body>
 </html>
