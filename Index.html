@@ -14,13 +14,14 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 
-  <style>
+<style>
     /* --- VARIABLES GLOBALES --- */
     :root {
       --color-base: #556B2F;
       --color-base-dark: #3e4f22;
       --header-height: 60px;
       --sidebar-width: 260px;
+      --sidebar-width-collapsed: 80px; /* Ancho reducido para el sidebar colapsado */
       --bottom-nav-height: 70px;
 
       /* Dimensiones de Logo */
@@ -147,6 +148,26 @@
       letter-spacing: -0.5px;
       line-height: 1;
     }
+    
+    /* Botón de toggle en Navbar */
+    .btn-toggle-sidebar {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      width: 40px; 
+      height: 40px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+      margin-right: 15px;
+      cursor: pointer;
+    }
+    .btn-toggle-sidebar:hover {
+      background: rgba(255,255,255,0.3);
+    }
+
 
     /* --- 3. SIDEBAR (Desktop) --- */
     .sidebar {
@@ -159,7 +180,41 @@
       border-right: 1px solid #e0e0e0;
       padding-top: 1rem;
       z-index: 1020;
+      transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); /* Transición suave */
     }
+    
+    /* Clases para el estado Colapsado */
+    .sidebar.collapsed {
+      width: var(--sidebar-width-collapsed);
+    }
+
+    /* Ocultar textos y subtítulos cuando está colapsado */
+    .sidebar.collapsed .nav-link-custom span,
+    .sidebar.collapsed .sidebar-header-text,
+    .sidebar.collapsed .small.text-uppercase {
+      display: none;
+    }
+
+    /* Centrar iconos cuando está colapsado */
+    .sidebar.collapsed .nav-link-custom {
+      justify-content: center;
+      padding-left: 0;
+      padding-right: 0;
+    }
+
+    .sidebar.collapsed .nav-link-custom i {
+      margin-right: 0;
+      font-size: 1.5rem; /* Iconos un poco más grandes */
+    }
+
+    /* Ajuste del footer del sidebar */
+    .sidebar.collapsed .border-top div {
+      justify-content: center;
+    }
+    .sidebar.collapsed .border-top div .text-muted {
+      display: none;
+    }
+
 
     .nav-link-custom {
       display: flex;
@@ -195,8 +250,13 @@
       /* Margen para Desktop */
       padding: 2rem;
       min-height: calc(100vh - var(--header-height));
-      transition: margin-left 0.3s ease;
+      transition: margin-left 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); /* Transición suave */
     }
+    
+    .main-wrapper.collapsed {
+      margin-left: var(--sidebar-width-collapsed);
+    }
+
 
     /* --- 5. BOTTOM NAVIGATION (Móvil) --- */
     .bottom-nav {
@@ -246,7 +306,7 @@
 
       /* Ocultar Sidebar */
       .main-wrapper {
-        margin-left: 0;
+        margin-left: 0 !important; /* Forzar margen 0 en móvil */
         padding: 1rem;
         padding-bottom: 90px;
       }
@@ -259,6 +319,11 @@
       /* Mostrar Bottom Nav */
       .navbar-brand-text {
         display: none;
+      }
+      
+      /* Ocultar botón toggle en móvil si no se usa */
+      .btn-toggle-sidebar {
+        display: none !important;
       }
 
       /* Ocultar texto Lock en móvil para ahorrar espacio si se quiere, o dejarlo */
@@ -317,6 +382,26 @@
       transform: translateY(-3px);
       box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1) !important;
     }
+
+    /* Estilos para los botones de acción sutiles */
+    .hover-danger:hover {
+        background-color: #dc354520 !important; /* Rojo suave */
+        color: #dc3545 !important;
+    }
+    .hover-warning:hover {
+        background-color: #ffc10720 !important; /* Amarillo suave */
+        color: #d6a100 !important;
+    }
+    .hover-primary:hover {
+        background-color: #0d6efd20 !important; /* Azul suave */
+        color: #0d6efd !important;
+    }
+
+    /* Ajuste fino para la tarjeta */
+    .project-card .card-title {
+        font-size: 1.1rem;
+        letter-spacing: -0.3px;
+    }
   </style>
 </head>
 
@@ -346,6 +431,9 @@
 
       <nav class="top-navbar">
         <div class="navbar-brand-group">
+          <button class="btn-toggle-sidebar d-none d-md-flex" @click="toggleSidebar">
+              <i class="bi" :class="isSidebarCollapsed ? 'bi-list' : 'bi-text-indent-right'"></i>
+          </button>
           <img src="https://drive.google.com/thumbnail?id=19JlPNv17CWp8RnF1bdiA7C25K2G17U11&sz=w1000" alt="Lock Logo"
             class="navbar-logo-img">
           <span class="navbar-brand-text d-none d-md-block"></span>
@@ -376,22 +464,29 @@
         </div>
       </nav>
 
-      <aside class="sidebar">
+      <aside class="sidebar" :class="{ collapsed: isSidebarCollapsed }">
         <nav class="d-flex flex-column h-100">
-          <div class="px-3 mb-2 small text-muted text-uppercase fw-bold" style="font-size: 0.75rem;">Navegación</div>
-          <a href="#" class="nav-link-custom" :class="{ active: currentView === 'projects' }"
-            @click.prevent="navigate('projects')">
-            <i class="bi bi-building-fill-gear"></i> Proyectos
+          <div class="px-3 mb-2 small text-muted text-uppercase fw-bold" 
+              style="font-size: 0.75rem; white-space: nowrap;">
+              Navegación
+          </div>
+
+          <a href="#" class="nav-link-custom" :class="{ active: currentView === 'dashboard' }" @click.prevent="navigate('dashboard')">
+            <i class="bi bi-grid-1x2-fill"></i> 
+            <span>Inicio</span>
           </a>
-          <a href="#" class="nav-link-custom" :class="{ active: currentView === 'config' }"
-            @click.prevent="navigate('config')">
-            <i class="bi bi-sliders"></i> Configuración
+          <a href="#" class="nav-link-custom" :class="{ active: currentView === 'projects' }" @click.prevent="navigate('projects')">
+            <i class="bi bi-building-fill-gear"></i> 
+            <span>Proyectos</span>
           </a>
+          <a href="#" class="nav-link-custom" :class="{ active: currentView === 'config' }" @click.prevent="navigate('config')"
+            v-if="currentUserProfile && currentUserProfile.rol_sistema === 'Admin'"> <i class="bi bi-sliders"></i> 
+            <span>Configuración</span>
+          </a>
+
           <div class="mt-auto p-3 border-top bg-light">
             <div class="d-flex align-items-center small">
-              <i class="bi bi-shield-check text-success me-2 fs-5"></i>
-              <div class="text-muted lh-1">
-                <strong>Sistema Seguro</strong><br>
+              <i class="bi bi-shield-check text-success fs-5"></i> <div class="text-muted lh-1 ms-2"> <strong>Sistema Seguro</strong><br>
                 <span style="font-size: 0.7rem;">Conectado a Google Drive</span>
               </div>
             </div>
@@ -399,7 +494,7 @@
         </nav>
       </aside>
 
-      <main class="main-wrapper">
+      <main class="main-wrapper" :class="{ collapsed: isSidebarCollapsed }">
         <div v-if="currentView === 'config'" class="fade-in">
           <div class="d-flex justify-content-between align-items-center mb-3">
             <h4 class="fw-bold mb-0">Configuración</h4>
@@ -410,13 +505,13 @@
                 <li class="nav-item"><button class="nav-link rounded-0 py-3 active" data-bs-toggle="tab"
                     data-bs-target="#tab-general">General</button></li>
                 <li class="nav-item"><button class="nav-link rounded-0 py-3" data-bs-toggle="tab"
+                    data-bs-target="#tab-profesionales">Equipo</button></li>                    
+                <li class="nav-item"><button class="nav-link rounded-0 py-3" data-bs-toggle="tab"
+                    data-bs-target="#tab-tipos">Tipos</button></li>  
+                <li class="nav-item"><button class="nav-link rounded-0 py-3" data-bs-toggle="tab"
+                    data-bs-target="#tab-checklists">Protocolos</button></li>                                      
+                <li class="nav-item"><button class="nav-link rounded-0 py-3" data-bs-toggle="tab"
                     data-bs-target="#tab-etapas">Etapas</button></li>
-                <li class="nav-item"><button class="nav-link rounded-0 py-3" data-bs-toggle="tab"
-                    data-bs-target="#tab-profesionales">Equipo</button></li>
-                <li class="nav-item"><button class="nav-link rounded-0 py-3" data-bs-toggle="tab"
-                    data-bs-target="#tab-checklists">Protocolos</button></li>
-                <li class="nav-item"><button class="nav-link rounded-0 py-3" data-bs-toggle="tab"
-                    data-bs-target="#tab-tipos">Tipos de Obra</button></li>
               </ul>
             </div>
             <div class="card-body bg-light">
@@ -468,44 +563,67 @@
                 </div>
 
                 <div class="tab-pane fade" id="tab-etapas">
-                  <div class="bg-white p-3 rounded shadow-sm mb-3 border-start border-5 border-expert">
-                    <label class="small fw-bold text-muted d-block mb-2">1. Selecciona qué tipo de obra quieres configurar:</label>
-                    <select class="form-select" v-model="selectedTipoConfig" @change="selectedEtapa = null">
-                      <option :value="null" disabled>-- Selecciona un Tipo --</option>
-                      <option v-for="t in tipos" :key="t.id" :value="t.id">{{ t.nombre_tipo }}</option>
-                    </select>
-                  </div>
-
-                  <div v-if="selectedTipoConfig" class="row h-100 fade-in">
+                  <div class="row h-100 fade-in">
                     <div class="col-md-6 mb-3">
-                      <div class="bg-white rounded shadow-sm h-100">
-                        <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
-                          <h6 class="mb-0 fw-bold text-expert">Ciclo de Vida</h6>
-                          <button class="btn btn-sm btn-expert rounded-pill px-3" @click="openModal('etapa')">
-                            <i class="bi bi-plus-lg"></i> Crear Etapa
-                          </button>
+                      <div class="bg-white rounded shadow-sm h-100 d-flex flex-column">
+                        
+                        <div class="p-3 border-bottom bg-light">
+                          <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0 fw-bold text-expert"><i class="bi bi-list-ol me-2"></i>Ciclo de Vida</h6>
+                            <button class="btn btn-sm btn-expert rounded-pill px-3 shadow-sm" @click="openModal('etapa')">
+                              <i class="bi bi-plus-lg"></i> Etapa
+                            </button>
+                          </div>
+                          
+                          <div class="input-group input-group-sm">
+                            <select class="form-select border-start-0 bg-white shadow-none text-dark fw-bold" 
+                                    v-model="selectedTipoConfig" 
+                                    @change="selectedEtapa = null">
+                              <option :value="null" disabled>-- Selecciona --</option>
+                              <option v-for="t in tipos" :key="t.id" :value="t.id">{{ t.nombre_tipo }}</option>
+                            </select>
+                          </div>
                         </div>
-                        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
-                          <table class="table table-hover align-middle mb-0">
+
+                        <div class="table-responsive flex-grow-1" style="min-height: 300px; max-height: 500px; overflow-y: auto;">
+                          <div v-if="etapasFiltradasPorTipo.length === 0" class="text-center py-5 text-muted">
+                              <small>No hay etapas para este tipo.</small>
+                          </div>
+                          <table v-else class="table table-hover align-middle mb-0">
                             <thead class="table-light small sticky-top">
                               <tr>
-                                <th class="ps-3">Orden</th>
-                                <th>Nombre</th>
-                                <th class="text-end pe-3">Acción</th>
+                                <th class="ps-3" style="width: 50px;">#</th>
+                                <th>Etapas</th>
+                                <th class="text-end pe-3" style="width: 50px;"></th>
                               </tr>
                             </thead>
                             <tbody>
                               <tr v-for="e in etapasFiltradasPorTipo" :key="e.id" @click="selectEtapa(e)"
                                 class="cursor-pointer transition-effect"
                                 :class="{'bg-expert-light border-start border-4 border-expert': selectedEtapa && selectedEtapa.id === e.id}">
-                                <td class="ps-3"><span class="badge bg-light text-dark border">{{e.orden}}</span></td>
-                                <td>
-                                  <span class="d-inline-block rounded-circle me-2"
-                                    :style="{width:'10px', height:'10px', backgroundColor: e.color_hex}"></span>
-                                  <span :class="{'fw-bold text-expert': selectedEtapa && selectedEtapa.id === e.id}">{{e.nombre_etapa}}</span>
+                                
+                                <td class="ps-3">
+                                  <span class="badge bg-white text-secondary border shadow-sm">{{e.orden}}</span>
                                 </td>
+                                
+                                <td class="py-2">
+                                  <div class="d-flex align-items-center">
+                                    <div class="rounded-circle me-2 flex-shrink-0" 
+                                          :style="{width:'8px', height:'8px', backgroundColor: e.color_hex}"></div>
+                                    <div>
+                                        <div class="lh-1" :class="{'fw-bold text-expert': selectedEtapa && selectedEtapa.id === e.id}">
+                                          {{e.nombre_etapa}}
+                                        </div>
+                                        <div v-if="e.descripcion" class="text-muted" style="font-size: 0.7rem; max-width: 400px;">
+                                          {{ e.descripcion }}
+                                        </div>
+                                    </div>
+                                  </div>
+                                </td>
+                                
                                 <td class="text-end pe-3">
-                                  <button class="btn btn-sm text-danger p-0" @click.stop="deleteRecord('CONF_ETAPAS', e.id)">
+                                  <button class="btn btn-sm text-danger p-0 opacity-50 hover-opacity-100" 
+                                          @click.stop="deleteRecord('CONF_ETAPAS', e.id)" title="Eliminar etapa">
                                     <i class="bi bi-trash"></i>
                                   </button>
                                 </td>
@@ -517,44 +635,69 @@
                     </div>
 
                     <div class="col-md-6 mb-3">
-                      <div class="bg-white rounded shadow-sm h-100 d-flex flex-column position-relative overflow-hidden">
-                        <div v-if="!selectedEtapa" class="d-flex flex-column align-items-center justify-content-center h-100 text-muted p-5 text-center">
+                      <div class="bg-white rounded shadow-sm h-100 d-flex flex-column position-relative overflow-hidden border">
+                        <div v-if="!selectedEtapa" class="d-flex flex-column align-items-center justify-content-center h-100 text-muted p-5 text-center bg-light">
                           <i class="bi bi-arrow-left-circle display-4 mb-3 opacity-25"></i>
                           <h6>Selecciona una Etapa</h6>
-                          <p class="small">Haz clic en una etapa de la izquierda para configurar sus tareas.</p>
+                          <p class="small text-muted">Haz clic en la lista izquierda para ver sus tareas.</p>
                         </div>
+                        
                         <div v-else class="d-flex flex-column h-100 fade-in">
-                          <div class="p-3 border-bottom bg-expert text-white d-flex justify-content-between align-items-center">
-                            <div><small class="opacity-75">TAREAS DE:</small><h6 class="mb-0 fw-bold">{{ selectedEtapa.nombre_etapa }}</h6></div>
-                            <span class="badge bg-white text-expert">{{ tareasFiltradasLength }} Tareas</span>
+                          <div class="p-3 border-bottom bg-expert text-white d-flex justify-content-between align-items-center shadow-sm" style="z-index: 2;">
+                            <div class="overflow-hidden">
+                              <small class="opacity-75 d-block text-uppercase" style="font-size: 0.65rem; letter-spacing: 1px;">Configurando Tareas</small>
+                              <h6 class="mb-0 fw-bold text-truncate">{{ selectedEtapa.nombre_etapa }}</h6>
+                            </div>
+                            <span class="badge bg-white text-expert shadow-sm">{{ tareasFiltradasLength }} Tareas</span>
                           </div>
-                          <div class="flex-grow-1 p-3 overflow-auto" style="max-height: 400px;">
-                            <div v-for="(t, index) in tareasFiltradas" :key="index" class="card border-0 shadow-sm mb-2 bg-light">
-                                <div class="card-body p-2 bg-light">
+                          
+                          <div class="flex-grow-1 p-3 overflow-auto bg-light" style="max-height: 400px;">
+                            <div v-for="(t, index) in tareasFiltradas" :key="index" class="card border-0 shadow-sm mb-2 bg-white">
+                                <div class="card-body p-2">
                                   <div class="d-flex align-items-center mb-2">
-                                    <div class="flex-grow-1"><input type="text" v-model="t.nombre_tarea" class="form-control form-control-sm border-0 bg-transparent fw-bold" placeholder="Nombre tarea..."></div>
-                                    <div class="form-check form-switch ms-2"><input class="form-check-input" type="checkbox" :id="'chk'+index" v-model="t.requiere_evidencia"><label class="small text-muted" :for="'chk'+index">Evidencia</label></div>
-                                    <button class="btn btn-sm text-danger ms-2" @click="removeTareaLocal(index,t.id)"><i class="bi bi-x-lg"></i></button>
+                                    <span class="text-muted small me-2">{{ index + 1 }}.</span>
+                                    <div class="flex-grow-1">
+                                      <input type="text" v-model="t.nombre_tarea" 
+                                            class="form-control form-control-sm border-0 bg-light fw-bold" 
+                                            placeholder="Nombre de la tarea...">
+                                    </div>
+                                    <div class="form-check form-switch ms-2">
+                                      <input class="form-check-input" type="checkbox" :id="'chk'+index" v-model="t.requiere_evidencia">
+                                      <label class="small text-muted cursor-pointer" :for="'chk'+index" title="Requiere subir archivo">Evidencia</label>
+                                    </div>
+                                    <button class="btn btn-sm text-danger ms-1" @click="removeTareaLocal(index,t.id)">
+                                      <i class="bi bi-x"></i>
+                                    </button>
                                   </div>
                                   <div class="row g-1 px-2 pb-1">
-                                    <div class="col-6"><select v-model="t.tipo_entrada" class="form-select form-select-sm border-0 bg-white small text-muted"><option value="text">Texto Corto</option><option value="textarea">Párrafo</option></select></div>
-                                    <div class="col-6"><select v-model="t.checklist_id" class="form-select form-select-sm border-0 bg-white small text-muted"><option value="">Sin Checklist</option><option v-for="cl in checklists" :key="cl.id" :value="cl.id">📋 {{ cl.nombre_checklist }}</option></select></div>
+                                    <div class="col-6">
+                                      <select v-model="t.tipo_entrada" class="form-select form-select-sm border-0 bg-light small text-muted">
+                                          <option value="text">Input Texto</option>
+                                          <option value="textarea">Área de Texto</option>
+                                      </select>
+                                    </div>
+                                    <div class="col-6">
+                                      <select v-model="t.checklist_id" class="form-select form-select-sm border-0 bg-light small text-muted">
+                                          <option value="">Sin Protocolo</option>
+                                          <option v-for="cl in checklists" :key="cl.id" :value="cl.id">📋 {{ cl.nombre_checklist }}</option>
+                                      </select>
+                                    </div>
                                   </div>
                                 </div>
                             </div>
-                            <button class="btn btn-outline-expert w-100 mb-2 border-dashed mt-3" @click="addTareaLocal"><i class="bi bi-plus-circle me-1"></i> Agregar Tarea</button>
+                            <button class="btn btn-outline-expert w-100 mb-2 border-dashed mt-3 opacity-75 hover-opacity-100" @click="addTareaLocal">
+                              <i class="bi bi-plus-circle me-1"></i> Nueva Tarea
+                            </button>
                           </div>
-                          <div class="p-3 border-top bg-light mt-auto">
-                            <button class="btn btn-expert w-100 shadow-sm" @click="saveTareasBatch" :disabled="loading"><i class="bi bi-save me-2"></i> Guardar Cambios</button>
+                          
+                          <div class="p-3 border-top bg-white mt-auto z-1">
+                            <button class="btn btn-expert w-100 shadow-sm rounded-pill" @click="saveTareasBatch" :disabled="loading">
+                              <i class="bi bi-save me-2"></i> Guardar Tareas
+                            </button>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div v-else class="text-center py-5 text-muted opacity-50">
-                    <i class="bi bi-diagram-2 display-1"></i>
-                    <p class="mt-3">Selecciona un Tipo de Obra arriba para ver su configuración.</p>
                   </div>
                 </div>
                 <div class="tab-pane fade" id="tab-profesionales">
@@ -730,8 +873,9 @@
                 <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
                 <input type="text" v-model="searchQuery" class="form-control border-start-0" placeholder="Buscar obra...">
               </div>
-              <button class="btn btn-expert d-flex align-items-center shadow-sm" @click="openModal('proyecto')">
-                <i class="bi bi-plus-lg me-2"></i> Nuevo Proyecto
+              <button class="btn btn-expert d-flex align-items-center shadow-sm" 
+                      @click="openModal('proyecto')"
+                      v-if="currentUserProfile && currentUserProfile.rol_sistema === 'Admin'"> <i class="bi bi-plus-lg me-2"></i> Nuevo Proyecto
               </button>
             </div>
           </div>
@@ -743,47 +887,133 @@
           </div>
           <div v-else class="row g-4">
             <div v-for="p in proyectosFiltradosBuscador" :key="p.id" class="col-12 col-md-6 col-xl-4">
-              <div class="card border-0 shadow-sm h-100 hover-card project-card">
-                <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-start mb-2">
-                    <div class="d-flex flex-wrap gap-1">
-                      
-                      <span class="badge rounded-pill border shadow-sm text-white"
-                            :style="{ backgroundColor: getProjectTypeInfo(p.id_tipo_proyecto).color }">
-                            <i class="bi bi-tag-fill me-1" style="font-size: 0.6rem; opacity: 0.8;"></i>
-                            {{ getProjectTypeInfo(p.id_tipo_proyecto).nombre }}
-                      </span>
+  
+              <div class="card border-0 shadow-sm h-100 hover-card project-card position-relative overflow-hidden"
+                  :style="{ borderTop: '4px solid ' + getProjectTypeInfo(p.id_tipo_proyecto).color }">
+                
+                <div class="card-body d-flex flex-column pt-3">
+                  
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                  
+                    <div class="d-flex align-items-center gap-1">
+                        
+                        <span class="badge border fw-normal text-white shadow-sm d-flex align-items-center" 
+                              :style="{ backgroundColor: getProjectTypeInfo(p.id_tipo_proyecto).color }"
+                              style="font-size: 0.65rem; letter-spacing: 0.5px;">
+                          {{ getProjectTypeInfo(p.id_tipo_proyecto).nombre }}
+                        </span>
 
-                      <span class="badge rounded-pill border shadow-sm text-white"
-                            :style="{ backgroundColor: p.stageColor }">
-                        {{ p.stageText }}
-                      </span>
+                        <span class="badge bg-light text-secondary border fw-normal text-uppercase" 
+                              style="letter-spacing: 0.5px; font-size: 0.65rem;">
+                          <i class="bi bi-hash"></i> {{ p.codigo }}
+                        </span>
+                        
+                    </div>
+                    
+                    <span class="badge rounded-pill border px-3 py-1"
+                          :style="{ 
+                            backgroundColor: p.stageColor + '20', 
+                            color: p.stageColor, 
+                            borderColor: p.stageColor + '40' 
+                          }">
+                      {{ p.stageText }}
+                    </span>
 
-                    </div>
-                    <small class="text-muted fw-bold ms-2">{{ p.codigo }}</small>
                   </div>
-                  <h5 class="card-title fw-bold text-dark mb-1 text-truncate">{{ p.nombre_obra }}</h5>
-                  <p class="card-text text-muted small mb-3"><i class="bi bi-person me-1"></i> {{ p.cliente }}</p>
-                  <div class="row g-2 small text-muted mb-3 bg-light p-2 rounded mx-0">
-                    <div class="col-6"><i class="bi bi-geo-alt me-1"></i> {{ p.ubicacion || 'Sin ubicación' }}</div>
-                    <div class="col-6 text-end"><i class="bi bi-calendar-event me-1"></i> {{ formatDate(p.fecha_inicio)}} - {{ formatDate(p.fecha_fin)}}</div>
+
+                  <h5 class="card-title fw-bold text-dark mb-1 text-truncate" :title="p.nombre_obra">
+                    {{ p.nombre_obra }}
+                  </h5>
+                  <div class="mb-3 text-muted small d-flex align-items-center text-truncate">
+                    <i class="bi bi-building me-1 opacity-50"></i> 
+                    <span>{{ p.cliente }}</span>
                   </div>
+
+                  <div class="row g-0 mb-3 small text-muted">
+                    <div class="col-6 d-flex align-items-center">
+                      <i class="bi bi-geo-alt-fill text-danger opacity-50 me-2"></i>
+                      <span class="text-truncate">{{ p.ubicacion || 'Sin ubicación' }}</span>
                     </div>
-                <div
-                  class="card-footer bg-white border-top-0 pb-3 pt-0 d-flex justify-content-between align-items-center">
-                  <button class="btn btn-sm btn-outline-danger" @click="deleteProject(p)" title="Eliminar Proyecto">
-                    <i class="bi bi-trash"></i>
+                    <div class="col-6 d-flex align-items-center justify-content-end">
+                      <i class="bi bi-calendar-range text-primary opacity-50 me-2"></i>
+                      <span style="font-variant-numeric: tabular-nums;">
+                        {{ formatDate(p.fecha_fin) }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="flex-grow-1" style="max-width: 100%;">
+                    <div class="d-flex justify-content-between small mb-1">
+                      <span class="fw-bold text-muted" style="font-size: 0.65rem; letter-spacing: 0.5px;">AVANCE</span>
+                      <span class="fw-bold text-expert" style="font-size: 0.75rem;">{{ calculateProjectProgress(p.id) }}%</span>
+                    </div>
+                    <div class="progress shadow-sm" style="height: 6px; background-color: #f0f0f0;">
+                      <div class="progress-bar bg-expert" 
+                          role="progressbar" 
+                          :style="{width: calculateProjectProgress(p.id) + '%'}">
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="mt-auto pt-3 border-top border-light d-flex align-items-center justify-content-between">
+                    <span class="text-muted small fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 1px;">Equipo</span>
+                    
+                    <div class="d-flex align-items-center ps-2" style="height: 30px;">
+                        <span v-if="getProjectTeam(p.id).length === 0" class="small text-muted fst-italic" style="font-size: 0.7rem;">
+                          Sin asignar
+                        </span>
+
+                        <div v-else class="d-flex align-items-center">
+                            <div v-for="(member, i) in getProjectTeam(p.id).slice(0, 4)" :key="member.id"
+                                class="rounded-circle border border-2 border-white d-flex align-items-center justify-content-center text-white small shadow-sm"
+                                :style="{
+                                    width: '30px', 
+                                    height: '30px', 
+                                    marginLeft: i > 0 ? '-10px' : '0', 
+                                    backgroundColor: i % 2 === 0 ? 'var(--color-base)' : '#6c757d',
+                                    fontSize: '0.7rem',
+                                    cursor: 'help'
+                                }"
+                                :title="member.nombre_completo + ' (' + member.rol + ')'"
+                                data-bs-toggle="tooltip">
+                                {{ member.nombre_completo.charAt(0).toUpperCase() }}{{ member.nombre_completo.split(' ')[1] ? member.nombre_completo.split(' ')[1].charAt(0).toUpperCase() : '' }}
+                            </div>
+                            <div v-if="getProjectTeam(p.id).length > 4"
+                                class="rounded-circle border border-2 border-white d-flex align-items-center justify-content-center bg-light text-muted small fw-bold shadow-sm"
+                                style="width: 30px; height: 30px; margin-left: -10px; font-size: 0.7rem;">
+                                +{{ getProjectTeam(p.id).length - 4 }}
+                            </div>
+                        </div>
+                    </div>
+                  </div>
+
+                </div> 
+
+                <div class="card-footer bg-white border-top-0 pb-3 pt-0 d-flex justify-content-between align-items-center">
+                  
+                  <div class="d-flex gap-1">
+                    <template v-if="currentUserProfile && currentUserProfile.rol_sistema === 'Admin'">
+                        <button class="btn btn-sm btn-light text-muted border-0 hover-danger" 
+                                @click.stop="deleteProject(p)" title="Eliminar">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                        <button class="btn btn-sm btn-light text-muted border-0 hover-warning" 
+                                @click.stop="resetProject(p)" title="Resetear">
+                          <i class="bi bi-arrow-repeat"></i>
+                        </button>
+                        <button class="btn btn-sm btn-light text-muted border-0 hover-primary" 
+                                @click.stop="openModal('proyecto', p)" title="Editar">
+                          <i class="bi bi-pencil"></i>
+                        </button>
+                    </template>
+                  </div>
+
+                  <button class="btn btn-sm btn-expert rounded-pill fw-bold shadow-sm transition-effect" 
+                          :class="currentUserProfile && currentUserProfile.rol_sistema === 'Admin' ? 'px-4' : 'w-100 py-2'" 
+                          @click="openProjectDetail(p)">
+                    Gestionar <i class="bi bi-chevron-right ms-1" style="font-size: 0.7rem;"></i>
                   </button>
-                  <button class="btn btn-sm btn-outline-warning text-dark" @click="resetProject(p)"
-                    title="Resetear Proyecto">
-                    <i class="bi bi-arrow-repeat"></i>
-                  </button>
-                  <button class="btn btn-sm btn-outline-secondary" @click="openModal('proyecto', p)">
-                    <i class="bi bi-pencil"></i> Editar
-                  </button>
-                  <button class="btn btn-sm btn-expert px-3" @click="openProjectDetail(p)">
-                    Gestionar <i class="bi bi-arrow-right ms-1"></i>
-                  </button>
+
                 </div>
               </div>
             </div>
@@ -796,27 +1026,102 @@
         </div>
 
         <div v-if="currentView === 'project-detail'" class="fade-in">
-          <div class="bg-white p-3 rounded shadow-sm mb-3 border-start border-5 border-expert sticky-top"
-            style="top: 60px; z-index: 1020;">
-            <div class="d-flex justify-content-between align-items-start">
-              <div>
-                <div class="d-flex align-items-center">
-                  <h5 class="fw-bold mb-0 text-dark me-2">{{ activeProject && activeProject.nombre_obra }}</h5>
-                  <span class="badge bg-light text-dark border">{{ activeProject && activeProject.codigo }}</span>
-                </div>
-                <small class="text-muted"><i class="bi bi-person me-1"></i>{{ activeProject && activeProject.cliente }}</small>
+            <div class="bg-white p-3 rounded shadow-sm mb-4 sticky-top position-relative overflow-hidden fade-in"
+                style="top: 10px; z-index: 1010; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;"
+                :style="{ borderTop: '4px solid ' + getProjectTypeInfo(activeProject.id_tipo_proyecto).color }">
+            
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              
+              <div class="d-flex align-items-center gap-1">
+                  <span class="badge border fw-normal text-white shadow-sm d-flex align-items-center" 
+                        :style="{ backgroundColor: getProjectTypeInfo(activeProject.id_tipo_proyecto).color }"
+                        style="font-size: 0.65rem; letter-spacing: 0.5px;">
+                     {{ getProjectTypeInfo(activeProject.id_tipo_proyecto).nombre }}
+                  </span>
+                  <span class="badge bg-light text-secondary border fw-normal text-uppercase" style="letter-spacing: 0.5px; font-size: 0.65rem;">
+                    <i class="bi bi-hash"></i> {{ activeProject.codigo }}
+                  </span>
               </div>
-              <button class="btn btn-sm btn-outline-secondary" @click="navigate('projects')"><i
-                  class="bi bi-x-lg"></i></button>
+
+              <div class="d-flex align-items-center gap-2">
+                  <span class="badge rounded-pill border px-3 py-1"
+                        :style="{ 
+                          backgroundColor: activeProject.stageColor + '20', 
+                          color: activeProject.stageColor, 
+                          borderColor: activeProject.stageColor + '40' 
+                        }">
+                    {{ activeProject.stageText }}
+                  </span>
+                  
+                  <button class="btn btn-sm btn-light border rounded-circle d-flex align-items-center justify-content-center" 
+                          style="width: 28px; height: 28px;"
+                          @click="navigate('projects')" 
+                          title="Cerrar y volver">
+                      <i class="bi bi-x-lg text-muted"></i>
+                  </button>
+              </div>
             </div>
-            <div class="mt-3">
-              <div class="d-flex justify-content-between small mb-1">
-                <span class="fw-bold text-expert">Avance</span>
-                <span class="fw-bold">{{ globalProgress }}%</span>
-              </div>
-              <div class="progress" style="height: 10px;">
-                <div class="progress-bar bg-expert" :style="{width: globalProgress + '%'}"></div>
-              </div>
+
+            <div class="d-flex flex-column mb-3">
+                <h5 class="fw-bold text-dark mb-1 text-truncate">{{ activeProject.nombre_obra }}</h5>
+                <div class="text-muted small d-flex align-items-center">
+                    <i class="bi bi-building me-1 opacity-50"></i> 
+                    <span>{{ activeProject.cliente }}</span>
+                </div>
+            </div>
+
+            <div class="row g-0 mb-3 small text-muted bg-light p-2 rounded mx-0">
+                <div class="col-6 d-flex align-items-center">
+                  <i class="bi bi-geo-alt-fill text-danger opacity-50 me-2"></i>
+                  <span class="text-truncate">{{ activeProject.ubicacion || 'Sin ubicación' }}</span>
+                </div>
+                <div class="col-6 d-flex align-items-center justify-content-end">
+                  <i class="bi bi-calendar-range text-primary opacity-50 me-2"></i>
+                  <span style="font-variant-numeric: tabular-nums;">
+                     {{ formatDate(activeProject.fecha_inicio) }} - {{ formatDate(activeProject.fecha_fin) }}
+                  </span>
+                </div>
+            </div>
+
+            <div class="pt-2 border-top d-flex align-items-center justify-content-between flex-wrap gap-3">
+               
+               <div class="d-flex align-items-center">
+                   <span class="text-muted small fw-bold text-uppercase me-2" style="font-size: 0.65rem; letter-spacing: 1px;">Equipo:</span>
+                   
+                   <span v-if="getProjectTeam(activeProject.id).length === 0" class="badge bg-light text-muted border fw-normal">
+                       Sin asignar
+                   </span>
+
+                   <div v-else class="d-flex">
+                        <div v-for="(member, i) in getProjectTeam(activeProject.id).slice(0, 5)" :key="member.id"
+                             class="rounded-circle border border-2 border-white d-flex align-items-center justify-content-center text-white small shadow-sm"
+                             :style="{
+                                 width: '32px', 
+                                 height: '32px', 
+                                 marginLeft: i > 0 ? '-10px' : '0', 
+                                 backgroundColor: i % 2 === 0 ? 'var(--color-base)' : '#6c757d',
+                                 fontSize: '0.75rem',
+                                 cursor: 'help'
+                             }"
+                             :title="member.nombre_completo"
+                             data-bs-toggle="tooltip">
+                             {{ member.nombre_completo.charAt(0).toUpperCase() }}{{ member.nombre_completo.split(' ')[1] ? member.nombre_completo.split(' ')[1].charAt(0).toUpperCase() : '' }}
+                        </div>
+                   </div>
+               </div>
+
+               <div class="flex-grow-1" style="min-width: 150px; max-width: 70%;">
+                  <div class="d-flex justify-content-between small mb-1">
+                    <span class="fw-bold text-expert" style="font-size: 0.7rem;">AVANCE GLOBAL</span>
+                    <span class="fw-bold">{{ globalProgress }}%</span>
+                  </div>
+                  <div class="progress shadow-sm" style="height: 8px; background-color: #e9ecef;">
+                    <div class="progress-bar bg-expert" 
+                         role="progressbar" 
+                         :style="{width: globalProgress + '%'}">
+                    </div>
+                  </div>
+               </div>
             </div>
           </div>
 
@@ -936,12 +1241,12 @@
       <nav class="bottom-nav">
         <a href="#" class="bottom-nav-item" :class="{ active: currentView === 'projects' }"
           @click.prevent="navigate('projects')">
-          <i class="bi" :class="currentView === 'projects' ? 'bi-building-fill-gear' : 'bi-building-gear'"></i>
+          v-if="currentUserProfile && currentUserProfile.rol_sistema === 'Admin'"> <i class="bi" :class="currentView === 'config' ? 'bi-sliders' : 'bi-sliders2'"></i>
           <span>Proyectos</span>
         </a>
         <a href="#" class="bottom-nav-item" :class="{ active: currentView === 'config' }"
-          @click.prevent="navigate('config')">
-          <i class="bi" :class="currentView === 'config' ? 'bi-sliders' : 'bi-sliders2'"></i>
+          @click.prevent="navigate('config')"
+          v-if="currentUserProfile && currentUserProfile.rol_sistema === 'Admin'"> <i class="bi" :class="currentView === 'config' ? 'bi-sliders' : 'bi-sliders2'"></i>
           <span>Ajustes</span>
         </a>
       </nav>
@@ -954,13 +1259,25 @@
                 data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body bg-light">
-              <div class="mb-3"><label class="form-label small fw-bold">Nombre</label><input type="text"
-                  v-model="form.nombre_etapa" class="form-control"></div>
+              <div class="mb-3">
+                <label class="form-label small fw-bold">Nombre</label>
+                <input type="text" v-model="form.nombre_etapa" class="form-control" placeholder="Ej: Obra Gris">
+              </div>
+              
+              <div class="mb-3">
+                <label class="form-label small fw-bold">Descripción</label>
+                <textarea v-model="form.descripcion" class="form-control" rows="2" placeholder="Detalle opcional de esta etapa..."></textarea>
+              </div>
+              
               <div class="row">
-                <div class="col-6"><label class="form-label small fw-bold">Orden</label><input type="number"
-                    v-model="form.orden" class="form-control"></div>
-                <div class="col-6"><label class="form-label small fw-bold">Color</label><input type="color"
-                    v-model="form.color_hex" class="form-control w-100 h-75"></div>
+                <div class="col-6">
+                    <label class="form-label small fw-bold">Orden</label>
+                    <input type="number" v-model="form.orden" class="form-control">
+                </div>
+                <div class="col-6">
+                    <label class="form-label small fw-bold">Color</label>
+                    <input type="color" v-model="form.color_hex" class="form-control w-100 h-75">
+                </div>
               </div>
             </div>
             <div class="modal-footer border-0 bg-white"><button class="btn btn-expert w-100 rounded-pill"
@@ -1170,76 +1487,130 @@
       <div class="modal fade" id="modal-proyecto" tabindex="-1">
         <div class="modal-dialog modal-lg">
           <div class="modal-content border-0 shadow">
+            
             <div class="modal-header bg-expert text-white">
-              <h5 class="modal-title fs-6"><i class="bi bi-building-gear me-2"></i>Ficha de Proyecto</h5><button
-                class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+              <h5 class="modal-title fs-6"><i class="bi bi-building-gear me-2"></i>Ficha de Proyecto</h5>
+              <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
+            
             <div class="modal-body bg-light">
+              
               <div class="mb-3">
                 <label class="form-label small fw-bold text-expert">Tipo de Proyecto *</label>
-                  <select v-model="form.id_tipo_proyecto" class="form-select shadow-sm"> <option value="" disabled>Seleccione clasificación...</option>
-                    <option v-for="t in tipos" :key="t.id" :value="t.id">
-                      {{ t.nombre_tipo }}
-                    </option>
+                  <select v-model="form.id_tipo_proyecto" class="form-select shadow-sm"> 
+                    <option value="" disabled>Seleccione clasificación...</option>
+                    <option v-for="t in tipos" :key="t.id" :value="t.id">{{ t.nombre_tipo }}</option>
                   </select>
-
                   <div v-if="form.id && form.id_tipo_proyecto !== originalTypeId" class="alert alert-warning d-flex align-items-center mt-2 mb-0 p-2 small border-warning">
                     <i class="bi bi-exclamation-triangle-fill fs-4 me-2"></i>
-                    <div class="lh-1">
-                      <strong>¡Cuidado!</strong><br>
-                      Al cambiar el tipo, se reiniciarán todas las tareas y se borrarán los avances.
-                    </div>
+                    <div class="lh-1"><strong>¡Cuidado!</strong><br>Cambiar el tipo reiniciará las tareas.</div>
                   </div>
-              <div class="row g-3 mb-3">
-                <div class="col-md-3"><label class="form-label small fw-bold">Código</label><input type="text"
-                    v-model="form.codigo" class="form-control" placeholder="Ej: OBR-001"></div>
-                <div class="col-md-9"><label class="form-label small fw-bold">Nombre de la Obra</label><input
-                    type="text" v-model="form.nombre_obra" class="form-control"
-                    placeholder="Ej: Residencia Familia González"></div>
               </div>
+
               <div class="row g-3 mb-3">
-                <div class="col-md-6"><label class="form-label small fw-bold">Beneficiado</label><input type="text"
-                    v-model="form.cliente" class="form-control"></div>
-                <div class="col-md-6"><label class="form-label small fw-bold">Ubicación / Ciudad</label><input
-                    type="text" v-model="form.ubicacion" class="form-control"></div>
+                <div class="col-md-3"><label class="form-label small fw-bold">Código</label><input type="text" v-model="form.codigo" class="form-control"></div>
+                <div class="col-md-9"><label class="form-label small fw-bold">Nombre de la Obra</label><input type="text" v-model="form.nombre_obra" class="form-control"></div>
               </div>
-              <div class="card border-0 shadow-sm">
+              
+              <div class="row g-3 mb-3">
+                <div class="col-md-6"><label class="form-label small fw-bold">Beneficiado</label><input type="text" v-model="form.cliente" class="form-control"></div>
+                <div class="col-md-6"><label class="form-label small fw-bold">Ubicación</label><input type="text" v-model="form.ubicacion" class="form-control"></div>
+              </div>
+
+              <div class="card border-0 shadow-sm mb-3">
                 <div class="card-body bg-white rounded">
                   <div class="row g-3">
-                    <div class="col-md-4"><label class="form-label small fw-bold text-muted">Fecha Inicio</label><input
-                        type="date" v-model="form.fecha_inicio" class="form-control"></div>
-                    <div class="col-md-4"><label class="form-label small fw-bold text-muted">Fecha Fin
-                        (Estimada)</label><input type="date" v-model="form.fecha_fin" class="form-control"></div>
-                    <div class="col-md-4">
-                      <label class="form-label small fw-bold text-muted">Etapa Actual</label>
-                      <div class="d-flex align-items-center p-2 rounded border bg-white" style="height: 38px;">
-                        <div v-if="form.id" class="d-flex align-items-center w-100">
-                          <span class="badge me-2" 
-                                :style="{ backgroundColor: getProjectStageInfo(form.id).color }">
-                                {{ getProjectStageInfo(form.id).text.charAt(0) }}
-                          </span>
-                          <span class="small text-truncate fw-bold">{{ getProjectStageInfo(form.id).text }}</span>
+                     <div class="col-md-4"><label class="form-label small fw-bold text-muted">Fecha Inicio</label><input type="date" v-model="form.fecha_inicio" class="form-control"></div>
+                     <div class="col-md-4"><label class="form-label small fw-bold text-muted">Fecha Fin</label><input type="date" v-model="form.fecha_fin" class="form-control"></div>
+                     <div class="col-md-4">
+                        <label class="form-label small fw-bold text-muted">Etapa Actual</label>
+                        <div class="d-flex align-items-center p-2 rounded border bg-light" style="height: 38px;">
+                           <div v-if="form.id" class="text-truncate fw-bold small">
+                              {{ getProjectStageInfo(form.id).text }}
+                           </div>
+                           <div v-else class="text-muted small fst-italic">Nueva</div>
                         </div>
-                        <div v-else class="small text-muted fst-italic">
-                          Se definirá al crear
-                        </div>
-                      </div>
-                    </div>
+                     </div>
                   </div>
                 </div>
               </div>
-              <div v-if="!form.id" class="alert alert-info mt-3 d-flex align-items-center small mb-0"><i
-                  class="bi bi-folder-plus me-2 fs-4"></i>
-                <div><strong>Creación Automática de Carpetas</strong><br>Al guardar, se creará la estructura en Google
-                  Drive automáticamente.</div>
+
+              <div v-if="currentUserProfile" class="card border-0 shadow-sm mt-3 border-start border-4 border-expert fade-in">
+                  <div class="card-header bg-white border-bottom fw-bold text-expert small d-flex justify-content-between align-items-center">
+                      <span>
+                          <i class="bi" :class="currentUserProfile.rol_sistema === 'Admin' ? 'bi-people-fill' : 'bi-info-circle-fill'"></i>
+                          {{ currentUserProfile.rol_sistema === 'Admin' ? 'Asignar Responsables' : 'Equipo Asignado' }}
+                      </span>
+                      <span class="badge bg-light text-dark border" v-if="form.asignados">
+                          {{ form.asignados.length }} Miembros
+                      </span>
+                  </div>
+                  
+                  <div class="card-body p-0 bg-white">
+                      <div class="p-2" style="max-height: 200px; overflow-y: auto;">
+                      
+                          <div v-if="!profesionales || profesionales.length === 0" class="text-center text-muted small py-3">
+                              <i class="bi bi-person-x fs-4 d-block mb-1"></i>
+                              No hay profesionales registrados.
+                          </div>
+
+                          <div v-else class="row g-2">
+                              <div class="col-md-6" v-for="prof in profesionales" :key="prof.id">
+                                  
+                                  <div v-if="currentUserProfile.rol_sistema === 'Admin' || (form.asignados && form.asignados.includes(prof.id))">
+                                      
+                                      <div class="form-check w-100 m-0 p-2 border rounded bg-light d-flex align-items-center" 
+                                          :class="{
+                                              'border-expert bg-expert-light': form.asignados && form.asignados.includes(prof.id),
+                                              'hover-card': currentUserProfile.rol_sistema === 'Admin' 
+                                          }">
+                                          
+                                          <input class="form-check-input ms-1 me-2" type="checkbox" 
+                                                :value="prof.id" 
+                                                :id="'assign_'+prof.id" 
+                                                v-model="form.asignados"
+                                                :disabled="currentUserProfile.rol_sistema !== 'Admin'">
+                                          
+                                          <label class="form-check-label small flex-grow-1 lh-1" 
+                                                :class="currentUserProfile.rol_sistema === 'Admin' ? 'cursor-pointer' : ''"
+                                                :for="'assign_'+prof.id">
+                                              <div class="fw-bold text-dark">{{ prof.nombre_completo }}</div>
+                                              <span class="text-muted" style="font-size: 0.7rem;">{{ prof.rol }}</span>
+                                          </label>
+                                      </div>
+
+                                  </div>
+                              </div>
+                              
+                              <div v-if="currentUserProfile.rol_sistema !== 'Admin' && (!form.asignados || form.asignados.length === 0)" class="col-12 text-center small text-muted py-3">
+                                  <i class="bi bi-people me-1"></i> No hay equipo asignado a este proyecto.
+                              </div>
+
+                          </div>
+
+                      </div>
+                  </div>
+                  
+                  <div class="card-footer bg-light p-2 small text-muted">
+                      <span v-if="currentUserProfile.rol_sistema === 'Admin'">
+                          <i class="bi bi-shield-lock me-1"></i> Control de Acceso: Solo los seleccionados verán este proyecto.
+                      </span>
+                      <span v-else>
+                          <i class="bi bi-eye-fill me-1"></i> Modo lectura: Contacta a un administrador para cambios.
+                      </span>
+                  </div>
               </div>
+              </div>
+            
+            <div class="modal-footer bg-white border-0">
+                <button class="btn btn-expert w-100 rounded-pill shadow-sm" @click="saveProyecto">
+                    <i class="bi bi-save me-2"></i> Guardar Proyecto
+                </button>
             </div>
-            <div class="modal-footer bg-white border-0"><button class="btn btn-expert w-100 rounded-pill shadow-sm"
-                @click="saveProyecto"><i class="bi bi-save me-2"></i> Guardar Proyecto</button></div>
+
           </div>
         </div>
       </div>
-    </div>
   </div>
 
   <script>
@@ -1250,9 +1621,17 @@
         // --- 1. ESTADO GLOBAL ---
         const isLoggedIn = ref(false);
         const loading = ref(true);
-        // CAMBIO: Inicializamos en 'projects' ya que se eliminó el dashboard
-        const currentView = ref('projects');
+        const currentView = ref('dashboard');
         const userEmail = ref('');
+
+        const isSidebarCollapsed = ref(false);
+
+        const currentUserProfile = ref(null);
+        const asignacionesGlobal = ref([]);
+
+        const toggleSidebar = () => {
+          isSidebarCollapsed.value = !isSidebarCollapsed.value;
+        };
 
         const executionTasks = ref([]);
 
@@ -1263,6 +1642,7 @@
         const etapas = ref([]);
         const profesionales = ref([]);
         const checklists = ref([]);
+        const allAsignaciones = ref([]);
 
         // --- 3. DATOS DE GESTIÓN (COCKPIT) ---
         const activeProject = ref(null);
@@ -1319,6 +1699,18 @@
             } catch (e) {
                 return false;
             }
+        };
+
+        // Función para calcular progreso individual en el listado
+        const calculateProjectProgress = (projectId) => {
+            // Usamos executionTasks que ya tiene todas las tareas cargadas
+            if (!executionTasks.value) return 0;
+            
+            const tasks = executionTasks.value.filter(t => t.proyecto_id === projectId);
+            if (tasks.length === 0) return 0;
+            
+            const completed = tasks.filter(t => t.estado === 'Completado').length;
+            return Math.round((completed / tasks.length) * 100);
         };
 
         // 2. Cuenta los items de un checklist de forma segura
@@ -1469,6 +1861,20 @@
            return { text: 'Planificación', color: '#999' };
         };
 
+        // Función para obtener los profesionales de un proyecto específico
+        const getProjectTeam = (projectId) => {
+            // Protección contra cargas vacías
+            if (!allAsignaciones.value || !profesionales.value) return [];
+            
+            // 1. Filtrar las relaciones de este proyecto
+            const assignedIds = allAsignaciones.value
+                .filter(a => a.id_proyecto === projectId)
+                .map(a => a.id_profesional);
+            
+            // 2. Mapear a los objetos completos de profesionales
+            return profesionales.value.filter(p => assignedIds.includes(p.id));
+        };
+
         // Estructura del proyecto activo (Agrupa tareas por etapa)
         const projectStructure = computed(() => {
             if (!activeProject.value) return [];
@@ -1496,10 +1902,23 @@
         // --- LOGIN / NAV ---
         const login = () => {
           loading.value = true;
-          google.script.run.withSuccessHandler(userInfo => {
+          google.script.run.withSuccessHandler(async (userInfo) => { // 1. Agregamos async
             userEmail.value = userInfo.email;
             isLoggedIn.value = true;
             loading.value = false;
+            
+            // 2. IMPORTANTE: Esperamos a que Vue actualice el DOM (v-if -> v-else)
+            await nextTick(); 
+            
+            // 3. Inicializamos los modales ahora que el HTML existe
+            ['etapa', 'profesional', 'proyecto', 'checklist', 'fillChecklist', 'tipo'].forEach(id => {
+                const el = document.getElementById('modal-' + id);
+                if (el) {
+                    // Creamos la instancia y la guardamos
+                    modales[id] = new bootstrap.Modal(el);
+                }
+            });
+
             loadData();
           }).getUserInfo();
         };
@@ -1537,17 +1956,30 @@
                 resEtapas,
                 resEjecucion,
                 resProfesionales,
-                resGen
-                // SE ELIMINÓ loadStats
+                resGen,
+                resSecureProjects,
+                resAsignaciones,  
+                resPerfil         
             ] = await Promise.all([
                 load("DB_PROYECTOS"),
                 load("CONF_TIPO_PROYECTO"),
                 load("CONF_ETAPAS"),
                 load("DB_EJECUCION"), 
                 load("CONF_PROFESIONALES"),
-                load("CONF_GENERAL")
+                load("CONF_GENERAL"),
+                new Promise(r => google.script.run.withSuccessHandler(r).getSecureProjects()),
+                load("CONF_REL_ASIGNACIONES"),
+                new Promise(r => google.script.run.withSuccessHandler(r).getCurrentUserProfile())
             ]);
 
+            // Asignaciones
+            currentUserProfile.value = resPerfil;
+            const misProyectos = resSecureProjects || []; // Usamos la lista filtrada
+            // ... (resto de asignaciones: tipos, etapas, etc.)
+
+            // IMPORTANTE: Guardamos las asignaciones en una variable global para usar en el modal
+            allAsignaciones.value = resAsignaciones || [];
+            
             // --- 2. ASIGNACIÓN DE MAESTROS (CON DOBLE PROTECCIÓN || []) ---
             // Usamos '|| []' para asegurar que NUNCA sea undefined, incluso si el backend falla.
             tipos.value = resTipos || []; 
@@ -1617,68 +2049,79 @@
           };
 
         const saveProyecto = () => {
-          if (!form.value.nombre_obra || !form.value.codigo) return Swal.fire('Faltan datos', '', 'warning');
+          // 1. Validaciones
+          if (!form.value.nombre_obra || !form.value.codigo) {
+             return Swal.fire('Faltan datos', 'El nombre y código son obligatorios', 'warning');
+          }
 
           loading.value = true;
-          const payload = JSON.parse(JSON.stringify(form.value));
 
-          // CASO 1: CREAR NUEVO
-          if (!payload.id) {
+          // 2. Preparar los datos
+          // Hacemos una copia limpia del formulario
+          const projectData = JSON.parse(JSON.stringify(form.value));
+          
+          // Extraemos la lista de IDs de los checkboxes (si no existe, array vacío)
+          const asignadosList = form.value.asignados || []; 
+          
+          // IMPORTANTE: Borramos 'asignados' del objeto projectData antes de enviarlo
+          // porque la tabla DB_PROYECTOS no tiene esa columna, eso va a REL_ASIGNACIONES.
+          delete projectData.asignados; 
+
+          // 3. Lógica de Guardado
+
+          // CASO A: CAMBIO DE TIPO DE PROYECTO (Acción Destructiva)
+          // Si es edición (tiene ID) Y el tipo cambió respecto al original
+          if (projectData.id && projectData.id_tipo_proyecto !== originalTypeId.value) {
+            loading.value = false; // Pausamos loading para preguntar
+            
+            Swal.fire({
+                title: '¿Cambiar Tipo de Proyecto?',
+                html: `Estás pasando de un tipo a otro.<br><br>
+                       <b class="text-danger">ESTO REINICIARÁ TODAS LAS TAREAS</b><br>
+                       y borrará las evidencias actuales.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'Sí, cambiar y reiniciar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    loading.value = true;
+                    // Nota: En este caso específico priorizamos el reset de estructura.
+                    // Las asignaciones se mantendrán como estaban antes del cambio.
+                    google.script.run
+                        .withSuccessHandler(() => {
+                            modales.proyecto.hide();
+                            loadData();
+                            Swal.fire('Actualizado', 'El proyecto se ha reconfigurado y reiniciado.', 'success');
+                        })
+                        .withFailureHandler(err => {
+                            loading.value = false;
+                            Swal.fire('Error', err.message, 'error');
+                        })
+                        .updateProjectTypeAndReset(projectData.id, projectData.id_tipo_proyecto);
+                }
+            });
+          } 
+          
+          // CASO B: GUARDADO ESTÁNDAR (Crear Nuevo o Editar Datos/Equipo)
+          else {
+            // Llamamos a la NUEVA función del backend que maneja la transacción doble
             google.script.run
-              .withSuccessHandler(() => {
+              .withSuccessHandler((res) => {
                 modales.proyecto.hide();
-                loadData();
-                Swal.fire('Listo', 'Proyecto inicializado', 'success');
+                loadData(); // Recargamos para aplicar los filtros de seguridad nuevos
+                loading.value = false;
+                
+                const msg = projectData.id ? 'Cambios guardados' : 'Proyecto creado y equipo asignado';
+                Swal.fire('Éxito', msg, 'success');
               })
               .withFailureHandler(e => {
                 loading.value = false;
-                Swal.fire('Error', e.message, 'error');
+                console.error(e);
+                Swal.fire('Error', 'No se pudo guardar: ' + e.message, 'error');
               })
-              .createProjectFull(payload);
-          } 
-          // CASO 2: EDITAR EXISTENTE
-          else {
-            // DETECTAR CAMBIO DE TIPO (ACCIÓN DESTRUCTIVA)
-            if (payload.id_tipo_proyecto !== originalTypeId.value) {
-                loading.value = false; // Pausamos loading para preguntar
-                
-                Swal.fire({
-                    title: '¿Cambiar Tipo de Proyecto?',
-                    html: `Estás pasando de un tipo a otro.<br><br>
-                           <b class="text-danger">ESTO REINICIARÁ TODAS LAS TAREAS</b><br>
-                           y borrará las evidencias actuales.`,
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#d33',
-                    confirmButtonText: 'Sí, cambiar y reiniciar',
-                    cancelButtonText: 'Cancelar'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        loading.value = true;
-                        // Llamamos a la función especial del Backend
-                        google.script.run
-                            .withSuccessHandler(() => {
-                                modales.proyecto.hide();
-                                loadData();
-                                Swal.fire('Actualizado', 'El proyecto se ha reconfigurado al nuevo tipo.', 'success');
-                            })
-                            .withFailureHandler(err => {
-                                loading.value = false;
-                                Swal.fire('Error', err.message, 'error');
-                            })
-                            .updateProjectTypeAndReset(payload.id, payload.id_tipo_proyecto);
-                    }
-                });
-            } 
-            // CASO 3: EDICIÓN NORMAL (Nombre, fechas, etc.)
-            else {
-                google.script.run.withSuccessHandler(() => {
-                    modales.proyecto.hide();
-                    loadData();
-                    loading.value = false;
-                    Swal.fire({ title: 'Guardado', icon: 'success', timer: 1000, showConfirmButton: false });
-                }).saveConfigRecord("DB_PROYECTOS", payload);
-            }
+              .saveProjectWithAssignments(projectData, asignadosList);
           }
         };
 
@@ -2059,6 +2502,7 @@
             
             form.value = d ? { ...d } : { 
               nombre_etapa: '', 
+              descripcion: '',
               orden: etapasFiltradasPorTipo.value.length + 1, // Auto-numeración inteligente basada en el filtro
               color_hex: '#556B2F',
               id_tipo_proyecto: selectedTipoConfig.value // <--- VINCULACIÓN AUTOMÁTICA AL TIPO SELECCIONADO
@@ -2119,16 +2563,32 @@
             
             originalTypeId.value = d ? d.id_tipo_proyecto : null;
 
+            // Calcular asignados actuales
+            let asignadosIds = [];
+            if (d && d.id) {
+                // Si editamos, buscamos en la variable global de asignaciones
+                asignadosIds = allAsignaciones.value
+                    .filter(a => a.id_proyecto === d.id)
+                    .map(a => a.id_profesional);
+            } else {
+                // Si es nuevo, me auto-asigno si soy admin
+                if (currentUserProfile.value && currentUserProfile.value.id) {
+                    asignadosIds.push(currentUserProfile.value.id);
+                }
+            }
+
             // Mapeamos y formateamos las fechas al abrir para editar
             form.value = d ? { 
               ...d,
               fecha_inicio: toInputDate(d.fecha_inicio), // <--- CORRECCIÓN AQUÍ
-              fecha_fin: toInputDate(d.fecha_fin)        // <--- CORRECCIÓN AQUÍ
+              fecha_fin: toInputDate(d.fecha_fin),        // <--- CORRECCIÓN AQUÍ
+              asignados: asignadosIds
             } : { 
               codigo: '', 
               nombre_obra: '', 
               estado: etapaInicial,
-              id_tipo_proyecto: tipoDefault 
+              id_tipo_proyecto: tipoDefault,
+              asignados: asignadosIds
             };
           }
 
@@ -2169,15 +2629,15 @@
           activeProject, executionTasks, projectStructure, globalProgress,
           allTareas, tareasFiltradas, selectedEtapa, currentChecklistTask,
           form, filterStatus, profesionalesFiltrados, getProjectStageInfo,
-          tipos, selectedTipoConfig, etapasFiltradasPorTipo,
+          tipos, selectedTipoConfig, etapasFiltradasPorTipo, getProjectTeam, calculateProjectProgress,
           login, logout, navigate,totalPendientes,searchQuery,proyectosFiltradosBuscador,
           saveProyecto, deleteProject, resetProject,originalTypeId,
           openProjectDetail, updateTask, toggleTaskState, openFillChecklist, saveChecklistData,
-          selectEtapa, addTareaLocal, removeTareaLocal, saveTareasBatch,
+          selectEtapa, addTareaLocal, removeTareaLocal, saveTareasBatch,getProjectTeam, 
           openModal, saveGeneric, saveDriveUrl, deleteRecord, getProjectTypeInfo,isModalItemsEmpty,
-          getEtapaColor, formatDate, toggleStatus, formatCurrency,
+          getEtapaColor, formatDate, toggleStatus, formatCurrency,allAsignaciones, currentUserProfile,
           parseJson, addChecklistItem, saveChecklist, hasChecklistData, triggerFileUpload, handleFileUpload, 
-          hasValidEvidence, getChecklistCount, tareasFiltradasLength
+          hasValidEvidence, getChecklistCount, tareasFiltradasLength,isSidebarCollapsed,toggleSidebar
         };
       }
     }).mount('#app');

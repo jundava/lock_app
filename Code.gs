@@ -999,3 +999,118 @@ function addChecklistDataColumn() {
     console.log("ℹ️ La columna 'datos_checklist' ya existe.");
   }
 }
+
+/* ==========================================================================
+   SEGURIDAD Y ASIGNACIONES (NUEVO)
+   ========================================================================== */
+
+/**
+ * 1. Obtiene el perfil del usuario actual desde CONF_PROFESIONALES
+ */
+function getCurrentUserProfile() {
+  const email = Session.getActiveUser().getEmail();
+  // Leemos la tabla de profesionales
+  const raw = readConfig("CONF_PROFESIONALES"); 
+  
+  // Buscamos al usuario por email
+  const user = raw.find(p => p.email && p.email.trim().toLowerCase() === email.toLowerCase());
+  
+  if (!user) {
+    // Si no está registrado, retornamos null o un perfil invitado restringido
+    return { id: null, nombre: 'Invitado', rol_sistema: 'Invitado' }; 
+  }
+
+  return {
+    id: user.id,
+    nombre: user.nombre_completo,
+    email: user.email,
+    rol_sistema: user.perfil_sistema || 'Operador' // Si está vacío, es Operador por defecto
+  };
+}
+
+/**
+ * 2. Lectura Segura de Proyectos (Row-Level Security)
+ * Reemplaza el uso directo de readConfig("DB_PROYECTOS") en el frontend
+ */
+function getSecureProjects() {
+  const user = getCurrentUserProfile();
+  const allProjects = readConfig("DB_PROYECTOS");
+
+  // A. Si es Admin, ve todo
+  if (user.rol_sistema === 'Admin') {
+    return allProjects;
+  }
+
+  // B. Si es Operador, filtramos por asignación
+  if (user.rol_sistema === 'Operador') {
+    const asignaciones = readConfig("CONF_REL_ASIGNACIONES");
+    
+    // Obtenemos IDs de proyectos asignados a este usuario
+    const misProyectosIds = asignaciones
+      .filter(a => a.id_profesional === user.id)
+      .map(a => a.id_proyecto);
+
+    return allProjects.filter(p => misProyectosIds.includes(p.id));
+  }
+
+  // C. Si no es nada (Invitado), no ve nada
+  return [];
+}
+
+/**
+ * 3. Transacción: Guardar Proyecto + Actualizar Asignaciones
+ * Recibe: (Objeto Proyecto, Array de IDs de Profesionales)
+ */
+function saveProjectWithAssignments(projectData, asignadosIds) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000); // Esperar hasta 10 seg
+
+    // --- PASO A: Guardar el Proyecto ---
+    if (!projectData.id) projectData.id = Utilities.getUuid();
+    // Guardamos el proyecto usando tu función base (asumiendo que existe saveConfigRecord)
+    saveConfigRecord("DB_PROYECTOS", projectData);
+
+    // --- PASO B: Actualizar Asignaciones (CONF_REL_ASIGNACIONES) ---
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("CONF_REL_ASIGNACIONES");
+    const data = sheet.getDataRange().getValues();
+    const headers = data.shift(); // Sacamos cabecera
+    
+    // Índices
+    const idxId = 0;
+    const idxProj = 1;
+    const idxProf = 2;
+    const idxDate = 3;
+
+    // 1. Filtramos para QUITAR las asignaciones viejas de este proyecto
+    // (Mantenemos todas las filas que NO sean de este proyecto)
+    let newData = data.filter(row => row[idxProj] !== projectData.id);
+
+    // 2. Agregamos las NUEVAS asignaciones
+    const now = new Date();
+    if (asignadosIds && Array.isArray(asignadosIds)) {
+      asignadosIds.forEach(idProf => {
+        newData.push([
+          Utilities.getUuid(), // ID único de la relación
+          projectData.id,      // ID Proyecto
+          idProf,              // ID Profesional
+          now                  // Created At
+        ]);
+      });
+    }
+
+    // 3. Escribimos todo de nuevo (Batch Update)
+    sheet.getRange(2, 1, sheet.getLastRow(), headers.length).clearContent();
+    if (newData.length > 0) {
+      sheet.getRange(2, 1, newData.length, headers.length).setValues(newData);
+    }
+    
+    return { success: true, projectId: projectData.id };
+
+  } catch (e) {
+    Logger.log("Error en saveProjectWithAssignments: " + e.toString());
+    throw new Error(e.toString());
+  } finally {
+    lock.releaseLock();
+  }
+}
