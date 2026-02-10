@@ -453,7 +453,7 @@
           </div>
       </div>
     </div>
-    
+
     <div v-if="!loading && isAuthorized" class="fade-in">
       <nav class="top-navbar">
         <div class="navbar-brand-group">
@@ -1699,20 +1699,39 @@
           return profesionales.value.filter(p => p.estado === filterStatus.value);
         });
 
-        // Filtro maestro de proyectos (Buscador Incremental)
+        // Filtro maestro de proyectos (Buscador Incremental + Seguridad de Rol)
         const proyectosFiltradosBuscador = computed(() => {
             // Protección: Si proyectos no está listo, devolver array vacío
             if (!proyectos.value || !Array.isArray(proyectos.value)) return [];
             
-            if (!searchQuery.value) return proyectos.value;
+            // --- 1. FILTRO DE SEGURIDAD (ROL) ---
+            let listaBase = proyectos.value;
+
+            // Si el usuario existe Y NO es Admin, aplicamos el filtro de asignación
+            if (currentUserProfile.value && currentUserProfile.value.rol_sistema !== 'Admin') {
+                // Obtenemos mi ID de usuario
+                const myId = currentUserProfile.value.id;
+                
+                // Buscamos en la tabla de asignaciones todos los proyectos vinculados a mí
+                const misProyectosIds = allAsignaciones.value
+                    .filter(asignacion => asignacion.id_profesional === myId)
+                    .map(asignacion => asignacion.id_proyecto); // Extraemos solo los IDs de proyecto
+
+                // Reducimos la lista de proyectos solo a los que coinciden con esos IDs
+                listaBase = listaBase.filter(p => misProyectosIds.includes(p.id));
+            }
+
+            // --- 2. FILTRO DE BÚSQUEDA (TEXTO) ---
+            // Ahora aplicamos el buscador sobre la lista ya filtrada (o completa si es Admin)
+            if (!searchQuery.value) return listaBase;
             
             const q = searchQuery.value.toLowerCase().trim();
-            return proyectos.value.filter(p => {
+            return listaBase.filter(p => {
                 return (p.nombre_obra || '').toLowerCase().includes(q) ||
-                      (p.codigo || '').toLowerCase().includes(q) ||
-                      (p.cliente || '').toLowerCase().includes(q) ||
-                      (p.ubicacion || '').toLowerCase().includes(q) ||
-                      (p.estado || '').toLowerCase().includes(q);
+                       (p.codigo || '').toLowerCase().includes(q) ||
+                       (p.cliente || '').toLowerCase().includes(q) ||
+                       (p.ubicacion || '').toLowerCase().includes(q) ||
+                       (p.estado || '').toLowerCase().includes(q);
             });
         });
 
@@ -2193,7 +2212,7 @@
         // --- REINICIO TOTAL DE PROYECTO (RESET) ---
         const resetProject = (p) => {
           Swal.fire({
-            title: '¿REINICIO TOTAL DE OBRA?',
+            title: 'Reiniciar toda la gestión del Proyecto?',
             html: `
                     <div class="text-start">
                       <p>Estás a punto de resetear: <b>${p.nombre_obra}</b>.</p>
@@ -2213,8 +2232,8 @@
             showCancelButton: true,
             confirmButtonColor: '#dc3545',
             cancelButtonColor: '#6c757d',
-            confirmButtonText: '<i class="bi bi-radioactive"></i> SÍ, ELIMINAR Y REINICIAR',
-            cancelButtonText: 'Cancelar, me arrepentí',
+            confirmButtonText: 'Eliminar',
+            cancelButtonText: 'Cancelar',
             focusCancel: true
           }).then((result) => {
             if (result.isConfirmed) {
