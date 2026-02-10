@@ -1012,19 +1012,20 @@ function getCurrentUserProfile() {
   // Leemos la tabla de profesionales
   const raw = readConfig("CONF_PROFESIONALES"); 
   
-  // Buscamos al usuario por email
+  // Buscamos al usuario por email (normalizando a minúsculas)
   const user = raw.find(p => p.email && p.email.trim().toLowerCase() === email.toLowerCase());
   
   if (!user) {
-    // Si no está registrado, retornamos null o un perfil invitado restringido
-    return { id: null, nombre: 'Invitado', rol_sistema: 'Invitado' }; 
+    // CAMBIO CRÍTICO: Retornamos null.
+    // Esto le indica al Frontend que debe mostrar la pantalla de "Acceso Denegado".
+    return null; 
   }
 
   return {
     id: user.id,
     nombre: user.nombre_completo,
     email: user.email,
-    rol_sistema: user.perfil_sistema || 'Operador' // Si está vacío, es Operador por defecto
+    rol_sistema: user.perfil_sistema || 'Operador' // Si está vacío en Excel, es Operador
   };
 }
 
