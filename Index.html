@@ -452,7 +452,6 @@
               </div>
           </div>
       </div>
-    </div>
 
     <div v-if="!loading && isAuthorized" class="fade-in">
       <nav class="top-navbar">
@@ -497,7 +496,8 @@
           </div>
 
           <a href="#" class="nav-link-custom" :class="{ active: currentView === 'dashboard' }" @click.prevent="navigate('dashboard')">
-            <i class="bi bi-grid-1x2-fill"></i> 
+            <i class="bi bi-grid-1x2-fill"></i>
+            
             <span>Inicio</span>
           </a>
           <a href="#" class="nav-link-custom" :class="{ active: currentView === 'projects' }" @click.prevent="navigate('projects')">
@@ -836,7 +836,7 @@
                       <table class="table table-hover align-middle mb-0">
                         <thead class="table-light small text-muted text-uppercase">
                           <tr>
-                            <th class="ps-4">Nombre del Protocolo</th>
+                            <th class="ps-4">Nombre</th>
                             <th>Complejidad</th>
                             <th>Última Edición</th>
                             <th class="text-end pe-4">Acciones</th>
@@ -962,7 +962,7 @@
                     <div class="col-6 d-flex align-items-center justify-content-end">
                       <i class="bi bi-calendar-range text-primary opacity-50 me-2"></i>
                       <span style="font-variant-numeric: tabular-nums;">
-                        {{ formatDate(p.fecha_fin) }}
+                        {{ formatDate(p.fecha_inicio) }} - {{ formatDate(p.fecha_fin) }}
                       </span>
                     </div>
                   </div>
@@ -1263,21 +1263,6 @@
         </div>
       </main>
 
-      <nav class="bottom-nav">
-        <a href="#" class="bottom-nav-item" :class="{ active: currentView === 'projects' }"
-          @click.prevent="navigate('projects')">
-          v-if="currentUserProfile && currentUserProfile.rol_sistema === 'Admin'"> <i class="bi" :class="currentView === 'config' ? 'bi-sliders' : 'bi-sliders2'"></i>
-          <span>Proyectos</span>
-        </a>
-        <a href="#" class="bottom-nav-item" :class="{ active: currentView === 'config' }"
-          @click.prevent="navigate('config')"
-          v-if="currentUserProfile && currentUserProfile.rol_sistema === 'Admin'"> <i class="bi" :class="currentView === 'config' ? 'bi-sliders' : 'bi-sliders2'"></i>
-          <span>Ajustes</span>
-        </a>
-      </nav>
-
-    </div>
-
       <div class="modal fade" id="modal-etapa" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content border-0 shadow">
@@ -1327,7 +1312,7 @@
             <div class="modal-body bg-light">
               <div class="row g-2 mb-3">
                 <div class="col-12"><label class="form-label small fw-bold text-muted">Nombre Completo *</label><input
-                    type="text" v-model="form.nombre_completo" class="form-control" placeholder="Ej: Arq. Juan Pérez">
+                    type="text" v-model="form.nombre_completo" class="form-control" placeholder="Ej: Juan Pérez">
                 </div>
               </div>
               <div class="row g-2 mb-3">
@@ -1627,7 +1612,8 @@
                       </span>
                   </div>
               </div>
-              </div>
+
+            </div>
             
             <div class="modal-footer bg-white border-0">
                 <button class="btn btn-expert w-100 rounded-pill shadow-sm" @click="saveProyecto">
@@ -1638,8 +1624,25 @@
           </div>
         </div>
       </div>
-  </div>
 
+      <nav class="bottom-nav">
+        <a href="#" class="bottom-nav-item" :class="{ active: currentView === 'dashboard' }"
+          @click.prevent="navigate('dashboard')"> <i class="bi" :class="currentView === 'dashboard' ? 'bi bi-grid-1x2-fill' : 'bi-grid-1x2-fill'"></i>
+          <span>Inicio</span>
+        </a>
+        <a href="#" class="bottom-nav-item" :class="{ active: currentView === 'projects' }"
+          @click.prevent="navigate('projects')"> <i class="bi" :class="currentView === 'projects' ? 'bi bi-building-fill-gear' : 'bi-building-fill-gear'"></i>
+          <span>Proyectos</span>
+        </a>
+        <a href="#" class="bottom-nav-item" :class="{ active: currentView === 'config' }"
+          @click.prevent="navigate('config')"
+          v-if="currentUserProfile && currentUserProfile.rol_sistema === 'Admin'"> <i class="bi" :class="currentView === 'config' ? 'bi bi-sliders' : 'bi-sliders2'"></i>
+          <span>Configuración</span>
+        </a>
+      </nav>
+      </div>
+    </div>
+  </div>
   <script>
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
 
@@ -1686,6 +1689,7 @@
 
         // --- 5. UI ---
         const form = ref({});
+        const isEditing = ref(false);
         const filterStatus = ref('all');
         let modales = {};
         const searchQuery = ref('');
@@ -2551,125 +2555,130 @@
           return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG' }).format(value);
         };
 
+        /**
+         * openModal - Versión GAS Expert Pro
+         * Gestiona la apertura dinámica de múltiples tipos de formularios.
+         */
         const openModal = (t, d = null) => {
-          console.log("Abriendo modal:", t, "Datos:", d); // DEBUG
+          console.log(`[GAS Expert] Abriendo modal: ${t} | Modo: ${d ? 'Edición' : 'Creación'}`);
 
-          // Reseteamos el form base
-          form.value = {};
+          // 1. GESTIÓN DE ESTADO REACTIVO
+          isEditing.value = !!d; // true si d tiene datos, false si es null
 
-          if (t === 'etapa') {
-            // --- VALIDACIÓN DE INTEGRIDAD ---
-            // No permitimos crear etapa si no se ha seleccionado un Tipo de Obra en el combo
-            if (!selectedTipoConfig.value) {
-              Swal.fire('Atención', 'Primero selecciona un Tipo de Obra en el menú desplegable.', 'warning');
-              return; 
-            }
-            
-            form.value = d ? { ...d } : { 
-              nombre_etapa: '', 
-              descripcion: '',
-              orden: etapasFiltradasPorTipo.value.length + 1, // Auto-numeración inteligente basada en el filtro
-              color_hex: '#556B2F',
-              id_tipo_proyecto: selectedTipoConfig.value // <--- VINCULACIÓN AUTOMÁTICA AL TIPO SELECCIONADO
-            };
-          }
-          else if (t === 'tipo') { 
-            // --- NUEVO: Configuración de Tipos de Obra ---
-            form.value = d ? { ...d } : { 
-              nombre_tipo: '', 
-              descripcion: '', 
-              color_representativo: '#556B2F' 
-            };
-          }
-          else if (t === 'profesional') {
-            form.value = d ? { ...d } : { 
-              nombre_completo: '', 
-              rol: '', 
-              especialidad: '', 
-              email: '', 
-              telefono: '', 
-              costo_hora: 0, 
-              estado: 'Activo' 
-            };
-          }
-          else if (t === 'checklist') {
-            // Lógica específica blindada para JSON
-            let items = [];
-            if (d && d.config_json) {
-              items = parseJson(d.config_json);
-            }
+          // 2. LÓGICA DE NEGOCIO POR TIPO (Preparación de datos)
+          switch (t) {
+            case 'etapa':
+              // Validación de Integridad Estricta
+              if (!selectedTipoConfig.value) {
+                Swal.fire('Atención', 'Primero selecciona un Tipo de Obra en el menú desplegable.', 'warning');
+                return; 
+              }
+              form.value = d ? { ...d } : { 
+                nombre_etapa: '', 
+                descripcion: '',
+                orden: etapasFiltradasPorTipo.value.length + 1,
+                color_hex: '#556B2F',
+                id_tipo_proyecto: selectedTipoConfig.value 
+              };
+              break;
 
-            form.value = d ? { ...d, items } : { nombre_checklist: '', items: [] };
+            case 'tipo':
+              form.value = d ? { ...d } : { 
+                nombre_tipo: '', 
+                descripcion: '', 
+                color_representativo: '#556B2F' 
+              };
+              break;
 
-            // Inicializamos Sortable con un pequeño retraso para asegurar que el DOM existe
-            nextTick(() => {
-              const el = document.getElementById('sortable-items');
-              if (el) {
-                try {
-                  // Si ya existe una instancia previa, Sortable la maneja, pero creamos una nueva segura
+            case 'profesional':
+              form.value = d ? { ...d } : { 
+                nombre_completo: '', 
+                rol: '', 
+                especialidad: '', 
+                email: '', 
+                telefono: '', 
+                costo_hora: 0, 
+                estado: 'Activo' 
+              };
+              break;
+
+            case 'checklist':
+              let items = [];
+              if (d && d.config_json) {
+                items = parseJson(d.config_json); // Asegúrate de tener definida esta helper parseJson
+              }
+              form.value = d ? { ...d, items } : { nombre_checklist: '', items: [] };
+
+              // Inicialización de Sortable (Drag & Drop)
+              nextTick(() => {
+                const el = document.getElementById('sortable-items');
+                if (el) {
+                  Sortable.getOrCreateInstance ? Sortable.getOrCreateInstance(el) : null; // Evitar duplicados
                   Sortable.create(el, {
                     animation: 150,
                     handle: '.handle',
-                    ghostClass: 'bg-light',
+                    ghostClass: 'bg-light-olive', // Clase personalizada con #556B2F al 10%
                     onEnd: (evt) => {
                       const item = form.value.items.splice(evt.oldIndex, 1)[0];
                       form.value.items.splice(evt.newIndex, 0, item);
                     }
                   });
-                } catch (err) {
-                  console.warn("Error iniciando SortableJS (Drag & Drop):", err);
                 }
-              }
-            });
-          }
-          else if (t === 'proyecto') {
-            const tipoDefault = tipos.value.length > 0 ? tipos.value[0].id : '';
-            const etapaInicial = etapas.value.length > 0 ? etapas.value[0].nombre_etapa : '';
-            
-            originalTypeId.value = d ? d.id_tipo_proyecto : null;
+              });
+              break;
 
-            // Calcular asignados actuales
-            let asignadosIds = [];
-            if (d && d.id) {
-                // Si editamos, buscamos en la variable global de asignaciones
+            case 'proyecto':
+              const tipoDefault = tipos.value.length > 0 ? tipos.value[0].id : '';
+              const etapaInicial = etapas.value.length > 0 ? etapas.value[0].nombre_etapa : '';
+              
+              originalTypeId.value = d ? d.id_tipo_proyecto : null;
+
+              // Gestión de Asignaciones (Traceabilidad)
+              let asignadosIds = [];
+              if (d && d.id) {
                 asignadosIds = allAsignaciones.value
-                    .filter(a => a.id_proyecto === d.id)
-                    .map(a => a.id_profesional);
-            } else {
-                // Si es nuevo, me auto-asigno si soy admin
-                if (currentUserProfile.value && currentUserProfile.value.id) {
-                    asignadosIds.push(currentUserProfile.value.id);
-                }
-            }
+                  .filter(a => a.id_proyecto === d.id)
+                  .map(a => a.id_profesional);
+              } else if (currentUserProfile.value?.id) {
+                asignadosIds.push(currentUserProfile.value.id);
+              }
 
-            // Mapeamos y formateamos las fechas al abrir para editar
-            form.value = d ? { 
-              ...d,
-              fecha_inicio: toInputDate(d.fecha_inicio), // <--- CORRECCIÓN AQUÍ
-              fecha_fin: toInputDate(d.fecha_fin),        // <--- CORRECCIÓN AQUÍ
-              asignados: asignadosIds
-            } : { 
-              codigo: '', 
-              nombre_obra: '', 
-              estado: etapaInicial,
-              id_tipo_proyecto: tipoDefault,
-              asignados: asignadosIds
-            };
+              form.value = d ? { 
+                ...d,
+                fecha_inicio: toInputDate(d.fecha_inicio), // Helper para formato YYYY-MM-DD
+                fecha_fin: toInputDate(d.fecha_fin),
+                asignados: asignadosIds
+              } : { 
+                codigo: '', 
+                nombre_obra: '', 
+                estado: etapaInicial,
+                id_tipo_proyecto: tipoDefault,
+                asignados: asignadosIds
+              };
+              break;
+
+            default:
+              console.warn(`[GAS Expert] El tipo de modal "${t}" no está definido en el switch.`);
           }
 
-          // Abrir el modal correspondiente usando la instancia de Bootstrap guardada
-          if (modales[t]) {
-            modales[t].show();
+          // 3. CONTROL DEL DOM Y BOOTSTRAP 5 (Cero suposiciones)
+          const modalId = `modal-${t}`;
+          const modalEl = document.getElementById(modalId);
+
+          if (modalEl) {
+            // Usamos getOrCreateInstance para mayor estabilidad en WebApps de GAS
+            const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modalInstance.show();
+            
+            // Guardamos en el objeto de referencia por si necesitamos cerrarlo programáticamente
+            modales[t] = modalInstance; 
           } else {
-            console.error("No se encontró el modal con ID:", t, ". Intentando recuperar...");
-            // Intento de recuperación si modales[] está vacío o falló la carga inicial
-            const el = document.getElementById('modal-' + t);
-            if (el) {
-              modales[t] = new bootstrap.Modal(el);
-              modales[t].show();
-            } else {
-              Swal.fire('Error UI', `No se encuentra la ventana modal: ${t}`, 'error');
-            }
+            Swal.fire({
+              title: 'Error de Interfaz',
+              text: `No se encontró el elemento DOM: ${modalId}`,
+              icon: 'error',
+              confirmButtonColor: '#556B2F'
+            });
           }
         };
 
