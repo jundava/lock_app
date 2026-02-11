@@ -576,6 +576,10 @@
                             </td>
                             <td class="small text-muted">{{ t.descripcion }}</td>
                             <td class="text-end pe-4">
+                              <button class="btn btn-sm btn-link text-expert p-1" @click="openModal('tipo', t)"
+                                title="Editar">
+                                <i class="bi bi-pencil-square"></i>
+                              </button>
                               <button class="btn btn-sm btn-link text-danger" @click="deleteRecord('CONF_TIPO_PROYECTO', t.id)">
                                 <i class="bi bi-trash"></i>
                               </button>
@@ -2010,120 +2014,124 @@
 
         // --- CARGA DE DATOS ---
         const loadData = async () => {
-        loading.value = true;
-        console.time("CargaTotal"); // Para medir rendimiento en consola
+          loading.value = true;
+          console.time("CargaTotal"); // Para medir rendimiento en consola
 
-        try {
-            // --- HELPERS ---
-            const load = (s) => new Promise(r => {
-                google.script.run
-                    .withSuccessHandler(res => r(Array.isArray(res) ? res : []))
-                    .withFailureHandler(err => {
-                        console.error(`Fallo carga de ${s}`, err);
-                        r([]); // Fallback seguro
-                    })
-                    .readConfig(s); // Asegúrate que esta función exista en Backend para leer cualquier tabla
-            });
+          try {
+              // --- HELPERS ---
+              const load = (s) => new Promise(r => {
+                  google.script.run
+                      .withSuccessHandler(res => r(Array.isArray(res) ? res : []))
+                      .withFailureHandler(err => {
+                          console.error(`Fallo carga de ${s}`, err);
+                          r([]); // Fallback seguro
+                      })
+                      .readConfig(s);
+              });
 
-            // --- 1. CARGA PARALELA MASIVA (CORE DATA) ---
-            // Traemos todo lo necesario para que la App sea funcional desde el segundo 0
-            const [
-                resProyectos,
-                resTipos,
-                resEtapas,
-                resEjecucion,
-                resProfesionales,
-                resGen,
-                resSecureProjects,
-                resAsignaciones,  
-                resPerfil         
-            ] = await Promise.all([
-                load("DB_PROYECTOS"),
-                load("CONF_TIPO_PROYECTO"),
-                load("CONF_ETAPAS"),
-                load("DB_EJECUCION"), 
-                load("CONF_PROFESIONALES"),
-                load("CONF_GENERAL"),
-                new Promise(r => google.script.run.withSuccessHandler(r).getSecureProjects()),
-                load("CONF_REL_ASIGNACIONES"),
-                new Promise(r => google.script.run.withSuccessHandler(r).getCurrentUserProfile())
-            ]);
+              // --- 1. CARGA PARALELA MASIVA (CORE DATA) ---
+              const [
+                  resProyectos,
+                  resTipos,
+                  resEtapas,
+                  resEjecucion,
+                  resProfesionales,
+                  resGen,
+                  resSecureProjects,
+                  resAsignaciones,  
+                  resPerfil,
+                  resProgressStats  // ✅ AGREGADO: Estadísticas dinámicas de progreso
+              ] = await Promise.all([
+                  load("DB_PROYECTOS"),
+                  load("CONF_TIPO_PROYECTO"),
+                  load("CONF_ETAPAS"),
+                  load("DB_EJECUCION"), 
+                  load("CONF_PROFESIONALES"),
+                  load("CONF_GENERAL"),
+                  new Promise(r => google.script.run.withSuccessHandler(r).getSecureProjects()),
+                  load("CONF_REL_ASIGNACIONES"),
+                  new Promise(r => google.script.run.withSuccessHandler(r).getCurrentUserProfile()),
+                  new Promise(r => google.script.run.withSuccessHandler(r).getGlobalProgressStats()) // ✅ NUEVO
+              ]);
 
-            // Asignaciones
-            currentUserProfile.value = resPerfil;
-            const misProyectos = resSecureProjects || []; // Usamos la lista filtrada
-            // ... (resto de asignaciones: tipos, etapas, etc.)
+              // Asignaciones
+              currentUserProfile.value = resPerfil;
+              const misProyectos = resSecureProjects || [];
 
-            // IMPORTANTE: Guardamos las asignaciones en una variable global para usar en el modal
-            allAsignaciones.value = resAsignaciones || [];
-            
-            // --- 2. ASIGNACIÓN DE MAESTROS (CON DOBLE PROTECCIÓN || []) ---
-            // Usamos '|| []' para asegurar que NUNCA sea undefined, incluso si el backend falla.
-            tipos.value = resTipos || []; 
-            
-            // Protección vital para el sort:
-            etapas.value = (resEtapas || []).sort((a, b) => (Number(a.orden) || 0) - (Number(b.orden) || 0));
-            
-            profesionales.value = resProfesionales || []; 
-            executionTasks.value = resEjecucion || [];
+              // IMPORTANTE: Guardamos las asignaciones en una variable global para usar en el modal
+              allAsignaciones.value = resAsignaciones || [];
+              
+              // --- 2. ASIGNACIÓN DE MAESTROS (CON DOBLE PROTECCIÓN || []) ---
+              tipos.value = resTipos || []; 
+              
+              // Protección vital para el sort:
+              etapas.value = (resEtapas || []).sort((a, b) => (Number(a.orden) || 0) - (Number(b.orden) || 0));
+              
+              profesionales.value = resProfesionales || []; 
+              executionTasks.value = resEjecucion || [];
 
-            // --- 3. CONFIGURACIÓN GENERAL ---
-            const driveData = resGen || [];
-            const dUrl = driveData.find(p => p.parametro === 'DRIVE_ROOT_FOLDER_URL');
-            config.value.driveUrl = dUrl ? dUrl.valor : '';
+              // --- 3. CONFIGURACIÓN GENERAL ---
+              const driveData = resGen || [];
+              const dUrl = driveData.find(p => p.parametro === 'DRIVE_ROOT_FOLDER_URL');
+              config.value.driveUrl = dUrl ? dUrl.valor : '';
 
-            // --- 4. PROCESAMIENTO DE PROYECTOS ---
-            proyectos.value = (resProyectos || []).reverse().map(p => {
-                // Lógica de presentación local basada en maestros
-                const etapaObj = etapas.value.find(e => e.nombre_etapa === p.estado);
-                const colorStage = etapaObj ? etapaObj.color_hex : '#6c757d';
-                const textStage = p.estado || 'Planificación';
+              // --- 4. PROCESAMIENTO DE PROYECTOS CON CÁLCULO DINÁMICO ---
+              proyectos.value = (resProyectos || []).reverse().map(p => {
+                  // ✅ NUEVO: Obtener estadísticas calculadas dinámicamente desde el backend
+                  const stats = resProgressStats ? resProgressStats[p.id] : null;
+                  
+                  if (stats) {
+                      // Usar datos calculados basados en el progreso real de tareas
+                      return {
+                          ...p,
+                          stageText: stats.stageText,      // ← Etapa actual calculada
+                          stageColor: stats.stageColor     // ← Color dinámico
+                      };
+                  } else {
+                      // Fallback: Proyecto sin tareas o sin estadísticas
+                      return {
+                          ...p,
+                          stageText: 'Planificación',
+                          stageColor: '#999'
+                      };
+                  }
+              });
 
-                return {
-                    ...p,
-                    stageText: textStage,
-                    stageColor: colorStage
-                    // Se eliminaron stats.tasks y stats.evidence
-                };
-            });
-
-            // --- 5. LOGICA DE NEGOCIO POR DEFECTO ---
-            // Verificamos que tipos.value exista Y sea un array antes de leer .length
-            if (tipos.value && Array.isArray(tipos.value) && tipos.value.length > 0 && !selectedTipoConfig.value) {
-                selectedTipoConfig.value = tipos.value[0].id;
-            }
-
-            // --- 6. CARGA DIFERIDA (LAZY LOAD) ---
-            load("CONF_CHECKLISTS").then(res => checklists.value = res || []); // Seguro
-
-            load("CONF_TAREAS")             
-                .then(res => {                                          
-                    const tareasData = Array.isArray(res) ? res : [];
-                    allTareas.value = tareasData.map(t => ({
-                        ...t,                            
-                        requiere_evidencia: String(t.requiere_evidencia).toLowerCase()
-                                            === 'true',
-                        tipo_entrada: t.tipo_entrada || 'text',
-                        checklist_id: t.checklist_id || ''                        
-                    }));                                    
-                })                                        
-                .catch(err => {
-                    console.error("Error cargando CONF_TAREAS:", err);
-                    allTareas.value = []; // Fallback seguro
-                });
-
-              } catch (e) {
-                  console.error("CRITICAL ERROR IN LOAD_DATA:", e);
-                  Swal.fire({
-                      icon: 'error',
-                      title: 'Error de Conexión',
-                      text: 'No se pudieron cargar los datos. Por favor recarga la página.'
-                  });
-              } finally {
-                  console.timeEnd("CargaTotal");
-                  loading.value = false; // Liberamos la UI
+              // --- 5. LOGICA DE NEGOCIO POR DEFECTO ---
+              if (tipos.value && Array.isArray(tipos.value) && tipos.value.length > 0 && !selectedTipoConfig.value) {
+                  selectedTipoConfig.value = tipos.value[0].id;
               }
-          };
+
+              // --- 6. CARGA DIFERIDA (LAZY LOAD) ---
+              load("CONF_CHECKLISTS").then(res => checklists.value = res || []);
+
+              load("CONF_TAREAS")             
+                  .then(res => {                                          
+                      const tareasData = Array.isArray(res) ? res : [];
+                      allTareas.value = tareasData.map(t => ({
+                          ...t,                            
+                          requiere_evidencia: String(t.requiere_evidencia).toLowerCase() === 'true',
+                          tipo_entrada: t.tipo_entrada || 'text',
+                          checklist_id: t.checklist_id || ''                        
+                      }));                                    
+                  })                                        
+                  .catch(err => {
+                      console.error("Error cargando CONF_TAREAS:", err);
+                      allTareas.value = [];
+                  });
+
+            } catch (e) {
+                console.error("CRITICAL ERROR IN LOAD_DATA:", e);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error de Conexión',
+                    text: 'No se pudieron cargar los datos. Por favor recarga la página.'
+                });
+            } finally {
+                console.timeEnd("CargaTotal");
+                loading.value = false;
+            }
+        };
 
         const saveProyecto = () => {
           // 1. Validaciones
@@ -2541,10 +2549,46 @@
         };
 
         const deleteRecord = (s, id) => {
-          Swal.fire({ title: '¿Borrar?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then(r => {
-            if (r.isConfirmed) {
+          Swal.fire({
+            title: '¿Confirmar eliminación?',
+            text: "Esta acción no se puede deshacer.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Sí, borrar',
+            cancelButtonText: 'Cancelar'
+          }).then((result) => {
+            if (result.isConfirmed) {
               loading.value = true;
-              google.script.run.withSuccessHandler(loadData).deleteConfigRecord(s, id);
+              
+              google.script.run
+                .withSuccessHandler((response) => {
+                  loading.value = false;
+                  
+                  if (response.success) {
+                    // Éxito: Notificar y recargar
+                    Swal.fire(
+                      '¡Eliminado!',
+                      response.message,
+                      'success'
+                    );
+                    loadData(); // Recargamos la tabla
+                  } else {
+                    // Error de lógica (Dependencias)
+                    Swal.fire({
+                      title: 'Operación Bloqueada',
+                      text: response.message, // Aquí mostramos "Usado en otra tabla..."
+                      icon: 'error',
+                      confirmButtonColor: '#556B2F'
+                    });
+                  }
+                })
+                .withFailureHandler((error) => {
+                  loading.value = false;
+                  Swal.fire('Error', 'Error de comunicación con el servidor.', 'error');
+                })
+                .deleteConfigRecord(s, id);
             }
           });
         };

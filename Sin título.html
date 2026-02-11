@@ -1,0 +1,104 @@
+const loadData = async () => {
+  loading.value = true;
+  console.time("CargaTotal");
+
+  try {
+    const load = (s) => new Promise(r => {
+        google.script.run
+            .withSuccessHandler(res => r(Array.isArray(res) ? res : []))
+            .withFailureHandler(err => {
+                console.error(`Fallo carga de ${s}`, err);
+                r([]);
+            })
+            .readConfig(s);
+    });
+
+    // Carga paralela
+    const [
+        resProyectos,
+        resTipos,
+        resEtapas,
+        resEjecucion,
+        resProfesionales,
+        resGen,
+        resSecureProjects,
+        resAsignaciones,  
+        resPerfil,
+        resProgressStats  // ← NUEVO: Cargar estadísticas de progreso
+    ] = await Promise.all([
+        load("DB_PROYECTOS"),
+        load("CONF_TIPO_PROYECTO"),
+        load("CONF_ETAPAS"),
+        load("DB_EJECUCION"), 
+        load("CONF_PROFESIONALES"),
+        load("CONF_GENERAL"),
+        new Promise(r => google.script.run.withSuccessHandler(r).getSecureProjects()),
+        load("CONF_REL_ASIGNACIONES"),
+        new Promise(r => google.script.run.withSuccessHandler(r).getCurrentUserProfile()),
+        new Promise(r => google.script.run.withSuccessHandler(r).getGlobalProgressStats()) // ← NUEVO
+    ]);
+
+    // Asignaciones previas...
+    currentUserProfile.value = resPerfil;
+    allAsignaciones.value = resAsignaciones || [];
+    tipos.value = resTipos || []; 
+    etapas.value = (resEtapas || []).sort((a, b) => (Number(a.orden) || 0) - (Number(b.orden) || 0));
+    profesionales.value = resProfesionales || []; 
+    executionTasks.value = resEjecucion || [];
+
+    const driveData = resGen || [];
+    const dUrl = driveData.find(p => p.parametro === 'DRIVE_ROOT_FOLDER_URL');
+    config.value.driveUrl = dUrl ? dUrl.valor : '';
+
+    // ✅ NUEVO: Procesamiento con datos de progreso reales
+    proyectos.value = (resProyectos || []).reverse().map(p => {
+        // Obtener estadísticas calculadas dinámicamente
+        const stats = resProgressStats[p.id];
+        
+        if (stats) {
+            return {
+                ...p,
+                stageText: stats.stageText,      // ← Calculado dinámicamente
+                stageColor: stats.stageColor     // ← Calculado dinámicamente
+            };
+        } else {
+            // Fallback si no hay stats (proyecto sin tareas)
+            return {
+                ...p,
+                stageText: 'Planificación',
+                stageColor: '#999'
+            };
+        }
+    });
+
+    // Resto del código...
+    if (tipos.value && Array.isArray(tipos.value) && tipos.value.length > 0 && !selectedTipoConfig.value) {
+        selectedTipoConfig.value = tipos.value[0].id;
+    }
+
+    load("CONF_CHECKLISTS").then(res => checklists.value = res || []);
+    load("CONF_TAREAS").then(res => {
+        const tareasData = Array.isArray(res) ? res : [];
+        allTareas.value = tareasData.map(t => ({
+            ...t,
+            requiere_evidencia: String(t.requiere_evidencia).toLowerCase() === 'true',
+            tipo_entrada: t.tipo_entrada || 'text',
+            checklist_id: t.checklist_id || ''
+        }));
+    }).catch(err => {
+        console.error("Error cargando CONF_TAREAS:", err);
+        allTareas.value = [];
+    });
+
+  } catch (e) {
+      console.error("CRITICAL ERROR IN LOAD_DATA:", e);
+      Swal.fire({
+          icon: 'error',
+          title: 'Error de Conexión',
+          text: 'No se pudieron cargar los datos. Por favor recarga la página.'
+      });
+  } finally {
+      console.timeEnd("CargaTotal");
+      loading.value = false;
+  }
+};
