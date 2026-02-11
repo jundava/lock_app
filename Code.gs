@@ -575,85 +575,100 @@ function getTaskInfo(taskId) {
 }
 
 /**
- * MOTOR DE TAREAS (Helper)
- * Borra tareas viejas de un proyecto y crea nuevas basadas en el Tipo.
- * NO USA LOCK INTERNO (para ser llamada por funciones que ya tienen lock)
+ * REGENERA UN PROYECTO COMPLETO (Drive y Tareas)
+ * @param {string} projectId ID del proyecto (UUID)
  */
-function regenerateProjectTasks(projectId, tipoId) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheetEjecucion = ss.getSheetByName("DB_EJECUCION");
-  const sheetEtapas = ss.getSheetByName("CONF_ETAPAS");
-  const sheetTareas = ss.getSheetByName("CONF_TAREAS");
+function regenerateProjectTasks(projectId) {
+  const lock = LockService.getScriptLock();
+  try {
+    // Esperar hasta 30 segundos para obtener el bloqueo
+    lock.waitLock(30000);
 
-  // A. Obtener IDs de Etapas para este Tipo de Proyecto
-  // CONF_ETAPAS: id(0)... id_tipo_proyecto(columna variable, buscar índice)
-  const etapasData = sheetEtapas.getDataRange().getValues();
-  const etapasHeaders = etapasData.shift();
-  const idxTipoEnEtapa = etapasHeaders.indexOf("id_tipo_proyecto");
-  const idxIdEtapa = 0;
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheetProyectos = ss.getSheetByName("DB_PROYECTOS");
+    const sheetEjecucion = ss.getSheetByName("DB_EJECUCION");
+    const sheetEtapas = ss.getSheetByName("CONF_ETAPAS");
+    const sheetTareas = ss.getSheetByName("CONF_TAREAS");
 
-  if (idxTipoEnEtapa === -1) throw new Error("No hay id_tipo_proyecto en CONF_ETAPAS");
+    // 1. OBTENER DATOS DEL PROYECTO
+    const proyData = sheetProyectos.getDataRange().getValues();
+    const proyHeaders = proyData.shift();
+    const idxProyId = proyHeaders.indexOf("id");
+    const idxTipoProy = proyHeaders.indexOf("id_tipo_proyecto");
+    const idxDriveId = proyHeaders.indexOf("drive_folder_id");
+    const idxNombre = proyHeaders.indexOf("nombre_obra");
 
-  const etapasIds = etapasData
-    .filter(r => String(r[idxTipoEnEtapa]) === String(tipoId))
-    .map(r => r[idxIdEtapa]);
+    const proyectoFila = proyData.find(r => r[idxProyId] === projectId);
+    if (!proyectoFila) throw new Error("Proyecto no encontrado.");
 
-  if (etapasIds.length === 0) {
-    console.warn("No hay etapas configuradas para el tipo: " + tipoId);
-    return; // No hay nada que generar
-  }
+    const tipoId = proyectoFila[idxTipoProy];
+    const oldFolderId = proyectoFila[idxDriveId];
+    const nombreObra = proyectoFila[idxNombre];
 
-  // B. Obtener Tareas Plantilla asociadas a esas Etapas
-  // CONF_TAREAS: id(0), etapa_id(1)...
-  const tareasData = sheetTareas.getDataRange().getValues();
-  const tareasHeaders = tareasData.shift(); // Quitamos header
-  const idxEtapaEnTarea = tareasHeaders.indexOf("etapa_id"); 
-  
-  // Filtramos las tareas que pertenecen a las etapas encontradas
-  const tareasTemplate = tareasData.filter(r => etapasIds.includes(r[idxEtapaEnTarea]));
+    // 2. GESTIÓN DE DRIVE (Acción Destructiva)
+    // Borrar carpeta anterior si existe
+    if (oldFolderId) {
+      try {
+        DriveApp.getFolderById(oldFolderId).setTrashed(true);
+      } catch (e) {
+        console.warn("No se pudo borrar la carpeta vieja: " + e.message);
+      }
+    }
+    // Crear nueva carpeta (Obtener raíz de CONF_GENERAL)
+    const newFolder = DriveApp.createFolder(`PROY - ${nombreObra}`);
+    const newDriveUrl = newFolder.getUrl();
+    const newDriveId = newFolder.getId();
 
-  // C. Preparar nuevas filas para DB_EJECUCION
-  // Estructura DB_EJECUCION: 
-  // id, proyecto_id, etapa_id, nombre_tarea, requiere_evidencia, tipo_entrada, checklist_id, estado, responsable_id, datos_evidencia, comentarios, updated_at, datos_checklist
-  
-  // Mapeamos dinámicamente según los índices de CONF_TAREAS
-  const tIdxName = tareasHeaders.indexOf("nombre_tarea");
-  const tIdxEvidencia = tareasHeaders.indexOf("requiere_evidencia");
-  const tIdxInput = tareasHeaders.indexOf("tipo_entrada");
-  const tIdxChecklist = tareasHeaders.indexOf("checklist_id");
+    // Actualizar DB_PROYECTOS con nuevo Drive y resetear estado
+    const rowIdx = proyData.findIndex(r => r[idxProyId] === projectId) + 2;
+    sheetProyectos.getRange(rowIdx, idxDriveId + 1).setValue(newDriveId);
+    sheetProyectos.getRange(rowIdx, proyHeaders.indexOf("drive_url") + 1).setValue(newDriveUrl);
+    sheetProyectos.getRange(rowIdx, proyHeaders.indexOf("estado") + 1).setValue("Roadmap");
 
-  const newRows = tareasTemplate.map(t => [
-    Utilities.getUuid(), // id
-    projectId,           // proyecto_id
-    t[idxEtapaEnTarea],  // etapa_id
-    t[tIdxName],         // nombre_tarea
-    t[tIdxEvidencia],    // requiere_evidencia
-    t[tIdxInput],        // tipo_entrada
-    t[tIdxChecklist],    // checklist_id
-    "Pendiente",         // estado inicial
-    "",                  // responsable_id (vacío)
-    "",                  // datos_evidencia
-    "",                  // comentarios
-    new Date(),          // updated_at
-    ""                   // datos_checklist
-  ]);
+    // 3. GENERAR NUEVAS TAREAS (Lógica en Memoria)
+    const etapasData = sheetEtapas.getDataRange().getValues();
+    const etapasHeaders = etapasData.shift();
+    const etapasIds = etapasData
+      .filter(r => String(r[etapasHeaders.indexOf("id_tipo_proyecto")]) === String(tipoId))
+      .map(r => r[0]);
 
-  // D. Transacción en DB_EJECUCION
-  const dataEjec = sheetEjecucion.getDataRange().getValues();
-  const headerEjec = dataEjec.shift(); // Guardar cabecera
-  const idxProyEjec = headerEjec.indexOf("proyecto_id");
+    const tareasData = sheetTareas.getDataRange().getValues();
+    const tareasHeaders = tareasData.shift();
+    const tareasTemplate = tareasData.filter(t => etapasIds.includes(t[tareasHeaders.indexOf("etapa_id")]));
 
-  // 1. Filtramos para borrar las viejas de este proyecto
-  const dataCleaned = dataEjec.filter(r => String(r[idxProyEjec]) !== String(projectId));
+    const newRows = tareasTemplate.map(t => [
+      Utilities.getUuid(),
+      projectId,
+      t[tareasHeaders.indexOf("etapa_id")],
+      t[tareasHeaders.indexOf("nombre_tarea")],
+      t[tareasHeaders.indexOf("requiere_evidencia")],
+      t[tareasHeaders.indexOf("tipo_entrada")],
+      t[tareasHeaders.indexOf("checklist_id")],
+      "Pendiente", "", "", "", new Date(), ""
+    ]);
 
-  // 2. Combinamos (Viejas limpias + Nuevas generadas)
-  const finalEjecucion = [...dataCleaned, ...newRows];
+    // 4. TRANSACCIÓN ATÓMICA EN DB_EJECUCION
+    const dataEjec = sheetEjecucion.getDataRange().getValues();
+    const headerEjec = dataEjec.shift();
+    const idxProyEjec = headerEjec.indexOf("proyecto_id");
 
-  // 3. Escribir
-  sheetEjecucion.clearContents();
-  sheetEjecucion.appendRow(headerEjec); // Poner cabecera
-  if (finalEjecucion.length > 0) {
-    sheetEjecucion.getRange(2, 1, finalEjecucion.length, finalEjecucion[0].length).setValues(finalEjecucion);
+    // Filtrar lo que NO es de este proyecto
+    const dataCleaned = dataEjec.filter(r => String(r[idxProyEjec]) !== String(projectId));
+    const finalEjecucion = [...dataCleaned, ...newRows];
+
+    // Escribir todo de una sola vez
+    sheetEjecucion.clearContents();
+    if (finalEjecucion.length > 0) {
+      sheetEjecucion.getRange(1, 1, 1, headerEjec.length).setValues([headerEjec]);
+      sheetEjecucion.getRange(2, 1, finalEjecucion.length, finalEjecucion[0].length).setValues(finalEjecucion);
+    }
+
+    return { success: true, folderUrl: newDriveUrl };
+
+  } catch (e) {
+    throw new Error("GAS_ERROR: " + e.message);
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -1207,3 +1222,398 @@ function checkDependencies(ss, parentTable, id) {
 
   return null; // Todo limpio
 }
+
+/**
+ * Obtiene estructura completa para reportes
+ * Incluye: Proyectos -> Etapas -> Tareas con todos los detalles
+ */
+function getReportData() {
+  try {
+    // Obtener datos base
+    const proyectos = readConfig("DB_PROYECTOS");
+    const etapas = readConfig("CONF_ETAPAS");
+    const tareas = readConfig("DB_EJECUCION");
+    const tipos = readConfig("CONF_TIPO_PROYECTO");
+    const asignaciones = readConfig("CONF_REL_ASIGNACIONES");
+    const profesionales = readConfig("CONF_PROFESIONALES");
+    const progressStats = getGlobalProgressStats();
+    
+    // Construir estructura jerárquica
+    const reportData = proyectos.map(proyecto => {
+      // Info del tipo
+      const tipo = tipos.find(t => t.id === proyecto.id_tipo_proyecto) || {};
+      
+      // Profesionales asignados
+      const asignadosIds = asignaciones
+        .filter(a => a.id_proyecto === proyecto.id)
+        .map(a => a.id_profesional);
+      
+      const equipo = profesionales.filter(p => asignadosIds.includes(p.id));
+      
+      // Estadísticas de progreso
+      const stats = progressStats[proyecto.id] || {
+        progress: 0,
+        stageText: 'Planificación',
+        stageColor: '#999'
+      };
+      
+      // Etapas del proyecto
+      const etapasProyecto = etapas
+        .filter(e => e.id_tipo_proyecto === proyecto.id_tipo_proyecto)
+        .sort((a, b) => (Number(a.orden) || 0) - (Number(b.orden) || 0))
+        .map(etapa => {
+          // Tareas de la etapa
+          const tareasEtapa = tareas
+            .filter(t => t.proyecto_id === proyecto.id && t.etapa_id === etapa.id)
+            .map(tarea => ({
+              id: tarea.id,
+              nombre: tarea.nombre_tarea,
+              estado: tarea.estado || 'Pendiente',
+              comentarios: tarea.comentarios || '',
+              requiere_evidencia: tarea.requiere_evidencia,
+              tiene_evidencia: tarea.datos_evidencia && String(tarea.datos_evidencia).length > 5,
+              evidencia_url: tarea.datos_evidencia || '',
+              tipo_entrada: tarea.tipo_entrada || 'text',
+              updated_at: tarea.updated_at
+            }));
+          
+          const completadas = tareasEtapa.filter(t => t.estado === 'Completado').length;
+          const progreso = tareasEtapa.length > 0 
+            ? Math.round((completadas / tareasEtapa.length) * 100) 
+            : 0;
+          
+          return {
+            id: etapa.id,
+            nombre: etapa.nombre_etapa,
+            orden: etapa.orden,
+            color: etapa.color_hex,
+            progreso: progreso,
+            tareas: tareasEtapa,
+            total_tareas: tareasEtapa.length,
+            tareas_completadas: completadas
+          };
+        });
+      
+      return {
+        // Datos del proyecto
+        id: proyecto.id,
+        codigo: proyecto.codigo,
+        nombre: proyecto.nombre_obra,
+        cliente: proyecto.cliente,
+        ubicacion: proyecto.ubicacion,
+        fecha_inicio: proyecto.fecha_inicio,
+        fecha_fin: proyecto.fecha_fin,
+        drive_url: proyecto.drive_url,
+        
+        // Info del tipo
+        tipo_id: proyecto.id_tipo_proyecto,
+        tipo_nombre: tipo.nombre_tipo || 'Sin tipo',
+        tipo_color: tipo.color_representativo || '#6c757d',
+        
+        // Progreso
+        progreso_global: stats.progress,
+        etapa_actual: stats.stageText,
+        etapa_color: stats.stageColor,
+        
+        // Equipo
+        equipo: equipo.map(p => ({
+          id: p.id,
+          nombre: p.nombre_completo,
+          rol: p.rol,
+          email: p.email
+        })),
+        
+        // Estructura jerárquica
+        etapas: etapasProyecto
+      };
+    });
+    
+    return {
+      success: true,
+      data: reportData,
+      tipos: tipos,
+      profesionales: profesionales
+    };
+    
+  } catch (e) {
+    console.error("Error en getReportData:", e);
+    return {
+      success: false,
+      error: e.message
+    };
+  }
+}
+
+/**
+ * Genera un reporte PDF con diseño profesional corporativo (High-End).
+ */
+function generatePDFReport(data, requesterEmail) {
+  try {
+    const userEmail = requesterEmail || Session.getActiveUser().getEmail();
+    const now = new Date();
+    const fechaReporte = Utilities.formatDate(now, Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm");
+    const logoBase64 = getLogoBase64(); 
+
+    // Definición de Colores
+    const COLOR_PRIMARY = "#556B2F"; // Olive Drab (Tu color base)
+    const COLOR_LIGHT = "#f4f6f2";   // Un verde muy pálido para filas alternas
+    const COLOR_TEXT = "#333333";
+    const COLOR_MUTED = "#666666";
+    const COLOR_BORDER = "#dddddd";
+
+    let html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        @page { size: A4 landscape; margin: 1.5cm; } /* Márgenes más amplios para elegancia */
+        
+        body { 
+          font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
+          color: ${COLOR_TEXT}; 
+          font-size: 9pt; 
+          line-height: 1.4;
+        }
+
+        /* --- HEADER SECTION --- */
+        .header-wrapper {
+          width: 100%;
+          border-bottom: 2px solid ${COLOR_PRIMARY};
+          padding-bottom: 15px;
+          margin-bottom: 25px;
+        }
+        .header-table { width: 100%; border-collapse: collapse; }
+        .logo-img { height: 45px; display: block; margin-bottom: 5px; }
+        .company-name { font-size: 8pt; color: ${COLOR_PRIMARY}; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; }
+        .report-title { font-size: 18pt; font-weight: 700; color: ${COLOR_TEXT}; margin: 5px 0 0 0; }
+        
+        .meta-box { text-align: right; font-size: 8pt; color: ${COLOR_MUTED}; }
+        .meta-label { font-weight: bold; color: ${COLOR_PRIMARY}; text-transform: uppercase; font-size: 7pt; }
+
+        /* --- DATA TABLE --- */
+        .data-table { width: 100%; border-collapse: collapse; border-spacing: 0; }
+        
+        /* Encabezados de tabla: Minimalistas y limpios */
+        .data-table th { 
+          background-color: ${COLOR_PRIMARY}; 
+          color: white; 
+          padding: 10px 8px; 
+          text-align: left; 
+          font-size: 8pt; 
+          font-weight: 600; 
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
+          border-bottom: 1px solid ${COLOR_PRIMARY};
+        }
+
+        /* Celdas */
+        .data-table td { 
+          padding: 12px 8px; /* Más padding vertical */
+          border-bottom: 1px solid ${COLOR_BORDER}; 
+          vertical-align: middle; 
+          font-size: 8.5pt;
+        }
+
+        /* Filas alternas sutiles */
+        .data-table tr:nth-child(even) { background-color: ${COLOR_LIGHT}; }
+        
+        /* Tipografía específica por columna */
+        .col-code { font-family: 'Courier New', monospace; font-weight: bold; color: ${COLOR_MUTED}; font-size: 8pt; }
+        .col-name { font-weight: bold; font-size: 9pt; color: #000; display: block; }
+        .col-subtext { font-size: 7.5pt; color: ${COLOR_MUTED}; margin-top: 2px; }
+        .col-client { color: ${COLOR_MUTED}; font-style: italic; }
+
+        /* --- COMPONENTES --- */
+        /* Badges (Píldoras) */
+        .badge { 
+          padding: 3px 8px; 
+          border-radius: 12px; /* Más redondeado */
+          font-size: 7pt; 
+          font-weight: 700; 
+          text-transform: uppercase;
+          display: inline-block; 
+          white-space: nowrap;
+          border: 1px solid transparent;
+        }
+
+        /* Barra de Progreso */
+        .progress-wrapper { display: flex; align-items: center; } /* Flex a veces falla en PDF GAS, usamos tabla interna o inline-block */
+        .progress-track { 
+          background-color: #e0e0e0; 
+          border-radius: 4px; 
+          width: 60px; 
+          height: 6px; 
+          display: inline-block; 
+          vertical-align: middle; 
+          overflow: hidden;
+        }
+        .progress-fill { 
+          height: 100%; 
+          background-color: ${COLOR_PRIMARY}; 
+        }
+        .progress-text { 
+          font-size: 7.5pt; 
+          font-weight: bold; 
+          color: ${COLOR_PRIMARY}; 
+          margin-left: 6px; 
+          vertical-align: middle;
+        }
+
+        /* Footer */
+        .footer { 
+          position: fixed; 
+          bottom: 0; 
+          left: 0; 
+          right: 0;
+          text-align: center; 
+          font-size: 7pt; 
+          color: #aaa; 
+          border-top: 1px solid #eee; 
+          padding-top: 10px; 
+        }
+      </style>
+    </head>
+    <body>
+
+      <div class="header-wrapper">
+        <table class="header-table">
+          <tr>
+            <td width="60%" style="vertical-align: bottom;">
+              ${logoBase64 ? `<img src="${logoBase64}" class="logo-img">` : ''}
+              <div class="company-name">Lock - Gestión Integral de Proyectos</div>
+              <h1 class="report-title">Reporte Ejecutivo de Proyectos</h1>
+            </td>
+            <td width="40%" class="meta-box" style="vertical-align: bottom;">
+              <div><span class="meta-label">Creado por:</span> ${userEmail}</div>
+              <div style="margin-top:4px;"><span class="meta-label">FECHA DE EMISIÓN:</span> ${fechaReporte}</div>
+              <div style="margin-top:4px;"><span class="meta-label">TOTAL REGISTROS:</span> ${data ? data.length : 0}</div>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th width="8%">CÓDIGO</th>
+            <th width="25%">OBRA / TIPO</th> <th width="15%">CLIENTE</th>
+            <th width="15%">ETAPA ACTUAL</th>
+            <th width="20%">PLAZO DE EJECUCIÓN</th>
+            <th width="12%">AVANCE</th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+    if (data && data.length > 0) {
+      data.forEach(p => {
+        const avance = Math.round(p.avance || 0);
+        const colorEtapa = p.etapa_color || '#999';
+        const colorTipo = p.tipo_color || '#666';
+
+        html += `
+          <tr>
+            <td class="col-code">${p.codigo}</td>
+
+            <td>
+              <span class="col-name">${p.nombre}</span>
+              <div class="col-subtext">
+                 <span style="color:${colorTipo}; font-weight:bold;">● ${p.tipo_nombre || 'General'}</span>
+              </div>
+            </td>
+
+            <td class="col-client">${p.cliente}</td>
+
+            <td>
+               <span class="badge" style="background-color: ${hexToRgba(colorEtapa, 0.1)}; color: ${colorEtapa}; border-color: ${hexToRgba(colorEtapa, 0.3)};">
+                 ${p.etapa_actual}
+               </span>
+            </td>
+
+            <td style="font-size: 8pt; color: #444;">${p.plazo}</td>
+
+            <td>
+              <div class="progress-track">
+                <div class="progress-fill" style="width: ${avance}%;"></div>
+              </div>
+              <span class="progress-text">${avance}%</span>
+            </td>
+          </tr>
+        `;
+      });
+    } else {
+      html += `<tr><td colspan="6" style="text-align:center; padding:30px; color:#999; font-style:italic;">No hay datos disponibles para mostrar.</td></tr>`;
+    }
+
+    html += `
+        </tbody>
+      </table>
+
+      <div class="footer">
+        Documento confidencial - Generado automáticamente por Lock - Gestión Integral de Proyectos
+      </div>
+
+    </body>
+    </html>
+    `;
+
+    const blob = Utilities.newBlob(html, MimeType.HTML).getAs(MimeType.PDF);
+    const fileName = `Reporte_Ejecutivo_${Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyyMMdd")}.pdf`;
+    blob.setName(fileName);
+    
+    const file = DriveApp.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    
+    return file.getUrl(); 
+
+  } catch (e) {
+    console.error("Error PDF:", e);
+    throw new Error("Fallo al generar PDF: " + e.message);
+  }
+}
+
+// --- HELPERS ---
+
+/**
+ * Convierte fecha ISO o string a formato DD/MM/YYYY
+ */
+function formatDateRaw(dateString) {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString; // Si no es fecha válida, devolver original
+  return Utilities.formatDate(date, Session.getScriptTimeZone(), "dd/MM/yyyy");
+}
+
+/**
+ * Helper simple para convertir HEX a RGBA (para fondos suaves de etiquetas)
+ */
+function hexToRgba(hex, alpha) {
+  if (!hex) return `rgba(85, 107, 47, ${alpha})`; // Fallback al color expert
+  let r = 0, g = 0, b = 0;
+  if (hex.length === 4) {
+    r = "0x" + hex[1] + hex[1];
+    g = "0x" + hex[2] + hex[2];
+    b = "0x" + hex[3] + hex[3];
+  } else if (hex.length === 7) {
+    r = "0x" + hex[1] + hex[2];
+    g = "0x" + hex[3] + hex[4];
+    b = "0x" + hex[5] + hex[6];
+  }
+  return `rgba(${+r}, ${+g}, ${+b}, ${alpha})`;
+}
+
+/**
+ * Función Placeholder para el logo.
+ * DEBES REEMPLAZAR EL STRING VACÍO CON EL BASE64 REAL DE TU IMAGEN '2-sin_fondo.png'
+ * Puedes obtenerlo usando un convertidor online o leyendo el archivo una vez en GAS.
+ */
+function getLogoBase64() {
+  // Lo ideal: Leer el archivo '2-sin_fondo.png' desde Drive si tienes su ID
+  const fileId = "1QqKv02uZDkIF_-BL8-CyskY9JkWR6iqs"; 
+  const blob = DriveApp.getFileById(fileId).getBlob();
+  return "data:image/png;base64," + Utilities.base64Encode(blob.getBytes());
+  
+}
+
+
+
+
