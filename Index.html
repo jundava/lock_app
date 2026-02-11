@@ -751,7 +751,7 @@
                             <th class="ps-3">Profesional</th>
                             <th>Rol / Especialidad</th>
                             <th>Contacto</th>
-                            <th>Valor Hora</th>
+                            <th>Perfil</th>
                             <th class="text-center">Estado</th>
                             <th class="text-end pe-3">Acciones</th>
                           </tr>
@@ -774,7 +774,7 @@
                             </td>
                             <td>
                               <span
-                                class="badge bg-expert bg-opacity-10 text-expert border border-expert border-opacity-25 mb-1">
+                                class="badge bg-expert bg-opacity-10 text-white border border-expert border-opacity-25 mb-1">
                                 {{ p.rol || 'Sin Rol' }}
                               </span>
                               <div class="small text-muted">{{ p.especialidad }}</div>
@@ -787,7 +787,7 @@
                               </div>
                             </td>
                             <td>
-                              <span class="fw-bold text-dark">{{ formatCurrency(p.costo_hora) }}</span>
+                              <span class="fw-bold text-dark">{{ p.perfil_sistema }}</span>
                             </td>
                             <td class="text-center">
                               <span class="badge rounded-pill"
@@ -1351,6 +1351,14 @@
                   <div class="input-group"><span class="input-group-text bg-white border-end-0">Gs.</span><input
                       type="number" v-model="form.costo_hora" class="form-control border-start-0" placeholder="0.00">
                   </div>
+                </div>
+                <div class="col-6">
+                  <label for="perfilSistema" class="form-label">Perfil de Sistema</label>
+                  <select id="perfilSistema" class="form-select" v-model="form.perfil_sistema" required>
+                    <option value="" disabled>Seleccione un rol...</option>
+                    <option value="Operador">Operador (Acceso Estándar)</option>
+                    <option value="Admin">Admin (Control Total)</option>
+                  </select>
                 </div>
                 <div class="col-6">
                   <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox"
@@ -2597,7 +2605,8 @@
                 especialidad: '', 
                 email: '', 
                 telefono: '', 
-                costo_hora: 0, 
+                costo_hora: 0,
+                perfil_sistema:'Operador',
                 estado: 'Activo' 
               };
               break;

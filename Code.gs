@@ -228,16 +228,6 @@ function saveConfigRecord(tableName, item) {
   }
 }
 
-/* AGREGAR ESTO A TU Code.gs EXISTENTE */
-
-function getUserInfo() {
-  return {
-    email: Session.getActiveUser().getEmail(),
-    // En el futuro podemos buscar nombre y rol en la tabla de Profesionales
-    role: 'Admin' 
-  };
-}
-
 /**
  * CreateProjectFull - Versión Optimizada
  * Crea proyecto, estructura en Drive y clona tareas según el Tipo de Proyecto.
