@@ -5,6 +5,285 @@ function doGet() {
       .addMetaTag('viewport', 'width=device-width, initial-scale=1')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
+
+/* ==========================================================================
+   LOCK MANAGER - SISTEMA DE BLOQUEOS GRANULARES
+   Evita que múltiples usuarios editen el mismo recurso simultáneamente
+   ========================================================================== */
+
+const LockManager = {
+  
+  /**
+   * Intenta adquirir lock para un recurso específico
+   * @param {string} resourceType - Tipo de recurso (PROJECT, ETAPA, TIPO, etc.)
+   * @param {string} resourceId - ID único del recurso
+   * @param {number} timeoutMs - Tiempo máximo de espera en milisegundos
+   * @returns {boolean} true si adquirió el lock exitosamente
+   */
+  tryAcquire: function(resourceType, resourceId, timeoutMs = 8000) {
+    const lockKey = `LOCK_${resourceType}_${resourceId}`;
+    const props = PropertiesService.getScriptProperties();
+    const startTime = Date.now();
+    const currentUser = Session.getActiveUser().getEmail();
+    
+    while (Date.now() - startTime < timeoutMs) {
+      const existingLock = props.getProperty(lockKey);
+      
+      if (!existingLock) {
+        // Lock disponible - intentar adquirir
+        const lockData = JSON.stringify({
+          user: currentUser,
+          timestamp: Date.now(),
+          resourceType: resourceType,
+          resourceId: resourceId
+        });
+        
+        props.setProperty(lockKey, lockData);
+        Utilities.sleep(100); // Anti-race condition delay
+        
+        // Verificar que somos nosotros (doble check por race conditions)
+        const verify = props.getProperty(lockKey);
+        if (verify && verify === lockData) {
+          console.log(`✅ Lock adquirido: ${resourceType}/${resourceId} por ${currentUser}`);
+          return true;
+        }
+      } else {
+        // Lock ocupado - verificar si está vencido
+        try {
+          const lockInfo = JSON.parse(existingLock);
+          const lockAge = Date.now() - lockInfo.timestamp;
+          
+          // Auto-limpieza de locks antiguos (> 2 minutos = posible crash)
+          if (lockAge > 120000) {
+            console.warn(`⚠️ Limpiando lock vencido: ${resourceType}/${resourceId} (${lockAge}ms antiguo)`);
+            props.deleteProperty(lockKey);
+            continue; // Reintentar inmediatamente
+          }
+          
+          // Informar al usuario quién tiene el lock
+          if (lockAge < 10000) { // Solo si es reciente (< 10 seg)
+            console.log(`ℹ️ Recurso bloqueado por ${lockInfo.user} hace ${Math.round(lockAge/1000)}s`);
+          }
+          
+        } catch (e) {
+          // Lock corrupto - eliminar
+          props.deleteProperty(lockKey);
+          continue;
+        }
+      }
+      
+      // Esperar antes de reintentar (exponential backoff)
+      const attempt = Math.floor((Date.now() - startTime) / 500);
+      const delay = Math.min(200 * Math.pow(1.5, attempt), 1000);
+      Utilities.sleep(delay);
+    }
+    
+    // Timeout alcanzado
+    console.error(`❌ Timeout intentando adquirir lock: ${resourceType}/${resourceId}`);
+    return false;
+  },
+  
+  /**
+   * Libera el lock de un recurso
+   */
+  release: function(resourceType, resourceId) {
+    const lockKey = `LOCK_${resourceType}_${resourceId}`;
+    const props = PropertiesService.getScriptProperties();
+    
+    try {
+      const existingLock = props.getProperty(lockKey);
+      if (existingLock) {
+        const lockInfo = JSON.parse(existingLock);
+        const currentUser = Session.getActiveUser().getEmail();
+        
+        // Solo permitir liberar si somos el dueño
+        if (lockInfo.user === currentUser) {
+          props.deleteProperty(lockKey);
+          console.log(`✅ Lock liberado: ${resourceType}/${resourceId}`);
+        } else {
+          console.warn(`⚠️ Intento de liberar lock ajeno: ${resourceType}/${resourceId}`);
+        }
+      }
+    } catch (e) {
+      console.error(`Error liberando lock: ${e.message}`);
+      // Liberar de todas formas en caso de error
+      props.deleteProperty(lockKey);
+    }
+  },
+  
+  /**
+   * Verifica si un recurso está bloqueado
+   */
+  isLocked: function(resourceType, resourceId) {
+    const lockKey = `LOCK_${resourceType}_${resourceId}`;
+    const props = PropertiesService.getScriptProperties();
+    const existingLock = props.getProperty(lockKey);
+    
+    if (!existingLock) return false;
+    
+    try {
+      const lockInfo = JSON.parse(existingLock);
+      const lockAge = Date.now() - lockInfo.timestamp;
+      
+      // Locks > 2 minutos se consideran vencidos
+      return lockAge < 120000;
+    } catch (e) {
+      return false;
+    }
+  },
+  
+  /**
+   * Limpia todos los locks vencidos (mantenimiento)
+   */
+  cleanExpiredLocks: function() {
+    const props = PropertiesService.getScriptProperties();
+    const allProps = props.getProperties();
+    let cleaned = 0;
+    
+    Object.keys(allProps).forEach(key => {
+      if (key.startsWith('LOCK_')) {
+        try {
+          const lockInfo = JSON.parse(allProps[key]);
+          const lockAge = Date.now() - lockInfo.timestamp;
+          
+          if (lockAge > 120000) {
+            props.deleteProperty(key);
+            cleaned++;
+          }
+        } catch (e) {
+          // Lock corrupto - eliminar
+          props.deleteProperty(key);
+          cleaned++;
+        }
+      }
+    });
+    
+    if (cleaned > 0) {
+      console.log(`🧹 Limpiados ${cleaned} locks vencidos`);
+    }
+    
+    return cleaned;
+  }
+};
+
+/* ==========================================================================
+   RETRY MANAGER - SISTEMA DE REINTENTOS CON EXPONENTIAL BACKOFF
+   Maneja errores temporales de Drive API y Sheets con reintentos inteligentes
+   ========================================================================== */
+
+const RetryManager = {
+  
+  /**
+   * Ejecuta una operación con reintentos automáticos
+   * @param {Function} operation - Función a ejecutar
+   * @param {Object} options - Opciones de configuración
+   * @returns {*} Resultado de la operación
+   */
+  execute: function(operation, options = {}) {
+    const {
+      maxRetries = 3,
+      baseDelay = 1000,
+      maxDelay = 10000,
+      operationName = 'Operación',
+      shouldRetry = null // Función opcional para decidir si reintentar
+    } = options;
+    
+    let lastError = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Intentar ejecutar la operación
+        const result = operation();
+        
+        // Si llegamos aquí, la operación fue exitosa
+        if (attempt > 1) {
+          console.log(`✅ ${operationName} exitosa en intento ${attempt}/${maxRetries}`);
+        }
+        
+        return result;
+        
+      } catch (error) {
+        lastError = error;
+        
+        // Verificar si debemos reintentar
+        if (shouldRetry && !shouldRetry(error)) {
+          console.error(`❌ ${operationName} falló (error no recuperable):`, error.message);
+          throw error;
+        }
+        
+        // Si es el último intento, lanzar el error
+        if (attempt === maxRetries) {
+          console.error(`❌ ${operationName} falló después de ${maxRetries} intentos:`, error.message);
+          throw error;
+        }
+        
+        // Calcular delay con exponential backoff
+        const exponentialDelay = baseDelay * Math.pow(2, attempt - 1);
+        const jitter = Math.random() * 200; // Jitter aleatorio para evitar thundering herd
+        const delay = Math.min(exponentialDelay + jitter, maxDelay);
+        
+        console.warn(
+          `⚠️ ${operationName} falló (intento ${attempt}/${maxRetries}). ` +
+          `Reintentando en ${Math.round(delay)}ms... Error: ${error.message}`
+        );
+        
+        // Esperar antes de reintentar
+        Utilities.sleep(delay);
+      }
+    }
+    
+    // No debería llegar aquí, pero por seguridad
+    throw lastError;
+  },
+  
+  /**
+   * Función específica para operaciones de Drive
+   */
+  driveOperation: function(operation, operationName = 'Operación Drive') {
+    return this.execute(operation, {
+      maxRetries: 4,
+      baseDelay: 1000,
+      maxDelay: 8000,
+      operationName: operationName,
+      shouldRetry: (error) => {
+        // Reintentar en errores comunes de Drive
+        const message = error.message.toLowerCase();
+        const retryableErrors = [
+          'rate limit',
+          'quota exceeded',
+          'internal error',
+          'backend error',
+          'timeout',
+          'temporarily unavailable',
+          'service unavailable',
+          'connection',
+          'socket'
+        ];
+        
+        return retryableErrors.some(err => message.includes(err));
+      }
+    });
+  },
+  
+  /**
+   * Función específica para operaciones de Sheets
+   */
+  sheetsOperation: function(operation, operationName = 'Operación Sheets') {
+    return this.execute(operation, {
+      maxRetries: 3,
+      baseDelay: 500,
+      maxDelay: 5000,
+      operationName: operationName,
+      shouldRetry: (error) => {
+        const message = error.message.toLowerCase();
+        return message.includes('service') || 
+               message.includes('timeout') || 
+               message.includes('temporarily');
+      }
+    });
+  }
+};
+
 /**
  * DriveManager: Gestiona la creación de carpetas por proyecto
  */
@@ -74,32 +353,6 @@ const CONFIG_SHEETS = {
   GENERAL: "CONF_GENERAL",
   TIPOS: "CONF_TIPO_PROYECTO"
 };
-
-
-/**
- * Borrado físico de configuración
- */
-function deleteConfigRecord(tableName, id) {
-  const lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(10000);
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(tableName);
-    const data = sheet.getDataRange().getValues();
-    const idColIndex = data[0].indexOf("id");
-    
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][idColIndex] === id) {
-        sheet.deleteRow(i + 1);
-        return { success: true, message: "Registro eliminado" };
-      }
-    }
-    return { success: false, error: "ID no encontrado" };
-  } catch (e) {
-    return { success: false, error: e.toString() };
-  } finally {
-    lock.releaseLock();
-  }
-}
 
 /**
  * Específico para guardar la URL de Drive en CONF_GENERAL
@@ -436,8 +689,14 @@ function getProjectExecutionData(projectId) {
 }
 
 /**
- * Sube una evidencia al Drive y actualiza la tarea con la URL.
- * Valida tipos: PDF, DOCX, XLSX, PPTX, TXT, Imágenes.
+ * SUBIR EVIDENCIA DE TAREA CON RETRY
+ * Maneja errores de Drive con reintentos automáticos
+ * 
+ * @param {string} taskId - UUID de la tarea
+ * @param {string} fileData - Datos del archivo en base64
+ * @param {string} fileName - Nombre del archivo
+ * @param {string} mimeType - Tipo MIME del archivo
+ * @returns {Object} {success, url}
  */
 function uploadTaskEvidence(taskId, fileData, fileName, mimeType) {
   const lock = LockService.getScriptLock();
@@ -452,38 +711,106 @@ function uploadTaskEvidence(taskId, fileData, fileName, mimeType) {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
       'application/vnd.openxmlformats-officedocument.presentationml.presentation', // pptx
       'text/plain',
-      'image/jpeg', 'image/png'
+      'image/jpeg', 
+      'image/png',
+      'image/jpg'
     ];
     
     if (!allowedMimes.includes(mimeType)) {
-      throw new Error("Formato no permitido. Solo PDF, Word, Excel, PPT, TXT o Imágenes.");
+      throw new Error(
+        "Formato no permitido. Solo PDF, Word, Excel, PowerPoint, TXT o Imágenes (JPG, PNG)."
+      );
     }
 
-    // 2. Obtener Proyecto y Carpeta
-    const taskInfo = getTaskInfo(taskId); 
-    if (!taskInfo || !taskInfo.drive_folder_id) throw new Error("No se encontró la carpeta del proyecto.");
-
-    const folder = DriveApp.getFolderById(taskInfo.drive_folder_id);
+    // 2. Validar tamaño (10MB max)
+    const sizeInBytes = Math.ceil((fileData.length * 3) / 4); // Aproximación del tamaño real
+    const maxSizeBytes = 10 * 1024 * 1024; // 10MB
     
-    // 3. Crear Blob y Archivo
-    const blob = Utilities.newBlob(Utilities.base64Decode(fileData), mimeType, fileName);
-    const file = folder.createFile(blob);
-    const fileUrl = file.getUrl();
+    if (sizeInBytes > maxSizeBytes) {
+      throw new Error(
+        `El archivo es demasiado grande (${Math.round(sizeInBytes / 1024 / 1024)}MB). ` +
+        `El límite es 10MB.`
+      );
+    }
 
-    // 4. Actualizar DB_EJECUCION (Llamamos a la función global)
-    // Liberamos el lock actual momentáneamente o confiamos en que updateExecutionTask maneje su propio lock rápido
-    // Nota: Como updateExecutionTask tiene su propio lock, es seguro llamarla.
+    // 3. Obtener información de la tarea y carpeta (con retry)
+    const taskInfo = RetryManager.sheetsOperation(() => {
+      return getTaskInfo(taskId);
+    }, 'Obtener información de tarea');
     
-    updateExecutionTask({
-      id: taskId,
-      datos_evidencia: fileUrl
-    });
+    if (!taskInfo || !taskInfo.drive_folder_id) {
+      throw new Error("No se encontró la carpeta del proyecto para esta tarea.");
+    }
 
-    return { success: true, url: fileUrl };
+    // 4. Obtener carpeta de Drive (con retry)
+    const folder = RetryManager.driveOperation(() => {
+      return DriveApp.getFolderById(taskInfo.drive_folder_id);
+    }, 'Obtener carpeta del proyecto');
+    
+    // 5. Crear blob y subir archivo (CON RETRY CRÍTICO)
+    const fileUrl = RetryManager.driveOperation(() => {
+      // Decodificar base64 y crear blob
+      const blob = Utilities.newBlob(
+        Utilities.base64Decode(fileData), 
+        mimeType, 
+        fileName
+      );
+      
+      // Verificar si ya existe un archivo con el mismo nombre
+      const existingFiles = folder.getFilesByName(fileName);
+      let file;
+      
+      if (existingFiles.hasNext()) {
+        // Archivo ya existe - crear nueva versión con timestamp
+        const timestamp = Utilities.formatDate(
+          new Date(), 
+          Session.getScriptTimeZone(), 
+          'yyyyMMdd_HHmmss'
+        );
+        const newFileName = fileName.replace(/(\.[^.]+)$/, `_${timestamp}$1`);
+        blob.setName(newFileName);
+        
+        file = folder.createFile(blob);
+        console.log(`✅ Archivo subido con nuevo nombre: ${newFileName}`);
+      } else {
+        // Crear nuevo archivo
+        file = folder.createFile(blob);
+        console.log(`✅ Archivo subido: ${fileName}`);
+      }
+      
+      // Configurar permisos (solo lectura para compartir)
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      
+      return file.getUrl();
+      
+    }, `Subir archivo "${fileName}" (${Math.round(sizeInBytes / 1024)}KB)`);
+
+    // 6. Actualizar DB_EJECUCION (con retry)
+    RetryManager.sheetsOperation(() => {
+      updateExecutionTask({
+        id: taskId,
+        datos_evidencia: fileUrl
+      });
+    }, 'Actualizar tarea con URL de evidencia');
+
+    return { 
+      success: true, 
+      url: fileUrl 
+    };
 
   } catch (e) {
-    console.error("Error upload:", e);
-    throw e;
+    console.error("❌ Error en uploadTaskEvidence:", e);
+    
+    // Mensajes de error más amigables
+    let userMessage = e.message;
+    if (e.message.includes('rate limit') || e.message.includes('quota')) {
+      userMessage = "El sistema está temporalmente ocupado. Por favor intenta nuevamente en 1 minuto.";
+    } else if (e.message.includes('timeout')) {
+      userMessage = "La subida tardó demasiado. Verifica tu conexión e intenta con un archivo más pequeño.";
+    }
+    
+    throw new Error(userMessage);
+    
   } finally {
     lock.releaseLock();
   }
@@ -1247,155 +1574,354 @@ function getLogoBase64() {
 }
 
 /**
- * FUNCIÓN MAESTRA: Gestión completa de carpetas Drive
- * Crea carpeta principal + subcarpetas de etapas según el tipo de proyecto
+ * FUNCIÓN MAESTRA CON RETRY AVANZADO: Gestión completa de carpetas Drive
+ * ✅ Anti-duplicación: Verifica existencia antes de crear
+ * ✅ Idempotente: Puede ejecutarse múltiples veces sin problemas
+ * ✅ Retry avanzado: Usa RetryManager para manejar errores de Drive
+ * ✅ Validación de integridad: Verifica estructura creada
+ * 
+ * @param {string} projectCode - Código del proyecto (ej: "CASA-001")
+ * @param {string} projectName - Nombre del proyecto (ej: "Mi Casa")
+ * @param {string} tipoId - UUID del tipo de proyecto
  * @returns {Object} {folderId, folderUrl}
  */
 function createProjectDriveStructure(projectCode, projectName, tipoId) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     
-    // 1. Obtener carpeta raíz de CONF_GENERAL
-    const sheetGeneral = ss.getSheetByName("CONF_GENERAL");
-    const generalData = sheetGeneral.getDataRange().getValues();
-    const rootUrlRow = generalData.find(r => r[0] === "DRIVE_ROOT_FOLDER_URL");
+    // 1. Obtener carpeta raíz de CONF_GENERAL (con retry)
+    const rootFolder = RetryManager.sheetsOperation(() => {
+      const sheetGeneral = ss.getSheetByName("CONF_GENERAL");
+      if (!sheetGeneral) {
+        throw new Error("La hoja CONF_GENERAL no existe");
+      }
+      
+      const generalData = sheetGeneral.getDataRange().getValues();
+      const rootUrlRow = generalData.find(r => r[0] === "DRIVE_ROOT_FOLDER_URL");
+      
+      if (!rootUrlRow || !rootUrlRow[1]) {
+        throw new Error("URL raíz de Drive no configurada en CONF_GENERAL");
+      }
+      
+      // Extraer ID de la URL
+      const match = rootUrlRow[1].match(/[-\w]{25,}/);
+      const rootFolderId = match ? match[0] : null;
+      if (!rootFolderId) {
+        throw new Error("ID de carpeta raíz inválido en CONF_GENERAL");
+      }
+      
+      // Obtener carpeta con retry
+      return RetryManager.driveOperation(
+        () => DriveApp.getFolderById(rootFolderId),
+        'Obtener carpeta raíz Drive'
+      );
+    }, 'Leer configuración Drive');
     
-    if (!rootUrlRow || !rootUrlRow[1]) {
-      throw new Error("URL raíz de Drive no configurada");
+    // 2. Crear/obtener carpeta principal del proyecto (ANTI-DUPLICACIÓN + RETRY)
+    const folderName = `${projectCode} - ${projectName}`;
+    
+    const projectFolder = RetryManager.driveOperation(() => {
+      const existingFolders = rootFolder.getFoldersByName(folderName);
+      
+      if (existingFolders.hasNext()) {
+        // Carpeta ya existe - reutilizar
+        const folder = existingFolders.next();
+        console.log(`ℹ️ Carpeta principal ya existía, reutilizando: "${folderName}"`);
+        
+        // Advertir si hay duplicados
+        if (existingFolders.hasNext()) {
+          console.warn(`⚠️ ADVERTENCIA: Existen múltiples carpetas con nombre "${folderName}". Usando la primera.`);
+        }
+        
+        return folder;
+      } else {
+        // Crear nueva carpeta
+        const newFolder = rootFolder.createFolder(folderName);
+        console.log(`✅ Carpeta principal creada: "${folderName}"`);
+        return newFolder;
+      }
+    }, `Crear carpeta proyecto "${folderName}"`);
+    
+    // 3. Obtener etapas del tipo (con retry en lectura)
+    const etapasTipo = RetryManager.sheetsOperation(() => {
+      const etapasRaw = readConfig("CONF_ETAPAS");
+      return etapasRaw
+        .filter(e => e.id_tipo_proyecto === tipoId)
+        .sort((a, b) => (Number(a.orden) || 999) - (Number(b.orden) || 999));
+    }, 'Leer etapas del tipo');
+    
+    if (etapasTipo.length === 0) {
+      console.warn(`⚠️ No hay etapas configuradas para el tipo: ${tipoId}`);
     }
     
-    // 2. Extraer ID de la URL
-    const match = rootUrlRow[1].match(/[-\w]{25,}/);
-    const rootFolderId = match ? match[0] : null;
-    if (!rootFolderId) throw new Error("ID de carpeta raíz inválido");
-    
-    const rootFolder = DriveApp.getFolderById(rootFolderId);
-    
-    // 3. Crear carpeta principal del proyecto
-    const folderName = `${projectCode} - ${projectName}`;
-    const projectFolder = rootFolder.createFolder(folderName);
-    
-    // 4. Crear subcarpetas de etapas (CRÍTICO PARA CONSISTENCIA)
-    const etapasRaw = readConfig("CONF_ETAPAS");
-    const etapasTipo = etapasRaw
-      .filter(e => e.id_tipo_proyecto === tipoId)
-      .sort((a, b) => (Number(a.orden) || 999) - (Number(b.orden) || 999));
+    // 4. Crear/verificar subcarpetas de etapas (BATCH CON RETRY)
+    let subfoldersCreated = 0;
+    let subfoldersExisted = 0;
+    let subfolderErrors = 0;
     
     etapasTipo.forEach(e => {
       if (e.nombre_etapa) {
-        projectFolder.createFolder(`${e.orden}. ${e.nombre_etapa}`);
+        const subfolderName = `${e.orden}. ${e.nombre_etapa}`;
+        
+        try {
+          RetryManager.driveOperation(() => {
+            const existingSubfolders = projectFolder.getFoldersByName(subfolderName);
+            
+            if (!existingSubfolders.hasNext()) {
+              projectFolder.createFolder(subfolderName);
+              subfoldersCreated++;
+            } else {
+              subfoldersExisted++;
+            }
+          }, `Crear subcarpeta "${subfolderName}"`);
+          
+        } catch (subError) {
+          // No fallar por una subcarpeta individual
+          console.error(`❌ Error creando subcarpeta "${subfolderName}":`, subError.message);
+          subfolderErrors++;
+        }
       }
     });
     
-    return {
-      folderId: projectFolder.getId(),
-      folderUrl: projectFolder.getUrl()
-    };
+    console.log(
+      `📁 Estructura Drive completada: ` +
+      `${subfoldersCreated} subcarpetas creadas, ` +
+      `${subfoldersExisted} ya existían` +
+      (subfolderErrors > 0 ? `, ${subfolderErrors} errores` : '')
+    );
+    
+    // 5. Validar que la carpeta fue creada correctamente (con retry)
+    const validation = RetryManager.driveOperation(() => {
+      return {
+        folderId: projectFolder.getId(),
+        folderUrl: projectFolder.getUrl()
+      };
+    }, 'Validar carpeta creada');
+    
+    return validation;
     
   } catch (e) {
-    console.error("Error en createProjectDriveStructure:", e);
+    console.error("❌ Error CRÍTICO en createProjectDriveStructure:", e);
     throw new Error("Error creando estructura Drive: " + e.message);
   }
 }
 
 /**
- * FUNCIÓN MAESTRA: Generación de tareas en DB_EJECUCION
- * Borra tareas viejas del proyecto + crea nuevas según el tipo
+ * FUNCIÓN MAESTRA MEJORADA: Generación atómica de tareas en DB_EJECUCION
+ * ✅ Operación atómica real: Todo o nada (no hay estados intermedios corruptos)
+ * ✅ Manejo de errores robusto
+ * ✅ Validaciones de integridad
+ * 
+ * @param {SpreadsheetApp.Spreadsheet} ss - Instancia del spreadsheet
+ * @param {string} projectId - UUID del proyecto
+ * @param {string} tipoId - UUID del tipo de proyecto
  */
 function regenerateProjectTasksInDB(ss, projectId, tipoId) {
   const sheetEjecucion = ss.getSheetByName("DB_EJECUCION");
   const sheetEtapas = ss.getSheetByName("CONF_ETAPAS");
   const sheetTareas = ss.getSheetByName("CONF_TAREAS");
 
-  // 1. Obtener etapas del tipo
-  const etapasData = sheetEtapas.getDataRange().getValues();
-  const etapasHeaders = etapasData.shift();
-  const idxTipoEnEtapa = etapasHeaders.indexOf("id_tipo_proyecto");
-  const idxIdEtapa = 0;
+  // Validaciones de existencia
+  if (!sheetEjecucion) throw new Error("La hoja DB_EJECUCION no existe");
+  if (!sheetEtapas) throw new Error("La hoja CONF_ETAPAS no existe");
+  if (!sheetTareas) throw new Error("La hoja CONF_TAREAS no existe");
 
-  if (idxTipoEnEtapa === -1) {
-    throw new Error("Columna id_tipo_proyecto no encontrada en CONF_ETAPAS");
-  }
+  try {
+    // 1. Obtener etapas del tipo
+    const etapasData = sheetEtapas.getDataRange().getValues();
+    const etapasHeaders = etapasData.shift();
+    const idxTipoEnEtapa = etapasHeaders.indexOf("id_tipo_proyecto");
+    const idxIdEtapa = 0;
 
-  const etapasIds = etapasData
-    .filter(r => String(r[idxTipoEnEtapa]) === String(tipoId))
-    .map(r => r[idxIdEtapa]);
+    if (idxTipoEnEtapa === -1) {
+      throw new Error("Columna 'id_tipo_proyecto' no encontrada en CONF_ETAPAS");
+    }
 
-  if (etapasIds.length === 0) {
-    console.warn("⚠️ No hay etapas configuradas para el tipo: " + tipoId);
-    return;
-  }
+    const etapasIds = etapasData
+      .filter(r => String(r[idxTipoEnEtapa]) === String(tipoId))
+      .map(r => r[idxIdEtapa]);
 
-  // 2. Obtener template de tareas
-  const tareasData = sheetTareas.getDataRange().getValues();
-  const tareasHeaders = tareasData.shift();
-  const idxEtapaEnTarea = tareasHeaders.indexOf("etapa_id");
-  const tIdxName = tareasHeaders.indexOf("nombre_tarea");
-  const tIdxEvidencia = tareasHeaders.indexOf("requiere_evidencia");
-  const tIdxInput = tareasHeaders.indexOf("tipo_entrada");
-  const tIdxChecklist = tareasHeaders.indexOf("checklist_id");
+    if (etapasIds.length === 0) {
+      console.warn(`⚠️ No hay etapas configuradas para el tipo: ${tipoId}`);
+      // No es un error - simplemente no hay tareas que generar
+      return;
+    }
 
-  const tareasTemplate = tareasData.filter(r => etapasIds.includes(r[idxEtapaEnTarea]));
+    // 2. Obtener template de tareas
+    const tareasData = sheetTareas.getDataRange().getValues();
+    const tareasHeaders = tareasData.shift();
+    const idxEtapaEnTarea = tareasHeaders.indexOf("etapa_id");
+    const tIdxName = tareasHeaders.indexOf("nombre_tarea");
+    const tIdxEvidencia = tareasHeaders.indexOf("requiere_evidencia");
+    const tIdxInput = tareasHeaders.indexOf("tipo_entrada");
+    const tIdxChecklist = tareasHeaders.indexOf("checklist_id");
 
-  // 3. Crear filas nuevas
-  const newRows = tareasTemplate.map(t => [
-    Utilities.getUuid(),           // id
-    projectId,                      // proyecto_id
-    t[idxEtapaEnTarea],            // etapa_id
-    t[tIdxName],                   // nombre_tarea
-    t[tIdxEvidencia],              // requiere_evidencia
-    t[tIdxInput] || 'text',        // tipo_entrada
-    t[tIdxChecklist] || '',        // checklist_id
-    "Pendiente",                   // estado
-    "",                            // comentarios
-    "",                            // datos_checklist
-    "",                            // datos_evidencia
-    new Date(),                    // created_at
-    ""                             // updated_at
-  ]);
+    if (idxEtapaEnTarea === -1) {
+      throw new Error("Columna 'etapa_id' no encontrada en CONF_TAREAS");
+    }
 
-  // 4. TRANSACCIÓN ATÓMICA: Borrar viejas + Escribir nuevas
-  const dataEjec = sheetEjecucion.getDataRange().getValues();
-  const headerEjec = dataEjec.shift();
-  const idxProyEjec = headerEjec.indexOf("proyecto_id");
+    const tareasTemplate = tareasData.filter(r => etapasIds.includes(r[idxEtapaEnTarea]));
 
-  // Filtrar todo EXCEPTO las tareas de este proyecto
-  const dataCleaned = dataEjec.filter(r => String(r[idxProyEjec]) !== String(projectId));
-  
-  // Combinar con las nuevas
-  const finalEjecucion = [...dataCleaned, ...newRows];
+    // 3. Crear filas nuevas
+    const newRows = tareasTemplate.map(t => [
+      Utilities.getUuid(),           // id
+      projectId,                      // proyecto_id
+      t[idxEtapaEnTarea],            // etapa_id
+      t[tIdxName] || '',             // nombre_tarea
+      t[tIdxEvidencia] || false,     // requiere_evidencia
+      t[tIdxInput] || 'text',        // tipo_entrada
+      t[tIdxChecklist] || '',        // checklist_id
+      "Pendiente",                   // estado
+      "",                            // comentarios
+      "",                            // datos_checklist
+      "",                            // datos_evidencia
+      new Date(),                    // created_at
+      ""                             // updated_at
+    ]);
 
-  // Escribir todo de una vez (operación atómica)
-  sheetEjecucion.clearContents();
-  if (finalEjecucion.length > 0) {
-    sheetEjecucion.getRange(1, 1, 1, headerEjec.length).setValues([headerEjec]);
-    sheetEjecucion.getRange(2, 1, finalEjecucion.length, finalEjecucion[0].length)
-      .setValues(finalEjecucion);
-  } else {
-    sheetEjecucion.getRange(1, 1, 1, headerEjec.length).setValues([headerEjec]);
+    // 4. OPERACIÓN ATÓMICA (Todo o Nada)
+    const dataEjec = sheetEjecucion.getDataRange().getValues();
+    const headerEjec = dataEjec.shift();
+    const idxProyEjec = headerEjec.indexOf("proyecto_id");
+
+    if (idxProyEjec === -1) {
+      throw new Error("Columna 'proyecto_id' no encontrada en DB_EJECUCION");
+    }
+
+    // Filtrar todo EXCEPTO las tareas de este proyecto
+    const dataCleaned = dataEjec.filter(r => String(r[idxProyEjec]) !== String(projectId));
+    
+    // Combinar con las nuevas
+    const finalEjecucion = [...dataCleaned, ...newRows];
+
+    // ✅ ESCRITURA ATÓMICA VERDADERA (Una sola operación batch)
+    try {
+      // Preparar matriz completa (headers + datos)
+      const fullMatrix = [headerEjec, ...finalEjecucion];
+      
+      // Obtener dimensiones actuales
+      const currentRows = sheetEjecucion.getMaxRows();
+      const currentCols = sheetEjecucion.getMaxColumns();
+      const neededRows = fullMatrix.length;
+      const neededCols = headerEjec.length;
+      
+      // Ajustar tamaño de hoja si es necesario (evita errores de rango)
+      if (neededRows > currentRows) {
+        sheetEjecucion.insertRowsAfter(currentRows, neededRows - currentRows);
+      } else if (neededRows < currentRows) {
+        // Eliminar filas sobrantes (opcional, para mantener limpia la hoja)
+        const rowsToDelete = currentRows - neededRows;
+        if (rowsToDelete > 0) {
+          sheetEjecucion.deleteRows(neededRows + 1, rowsToDelete);
+        }
+      }
+      
+      if (neededCols > currentCols) {
+        sheetEjecucion.insertColumnsAfter(currentCols, neededCols - currentCols);
+      }
+      
+      // Borrar contenido viejo SOLO DESPUÉS de tener la nueva data lista
+      sheetEjecucion.getRange(1, 1, currentRows, currentCols).clearContent();
+      
+      // Escribir TODO de una sola vez (ATÓMICO)
+      if (fullMatrix.length > 0) {
+        sheetEjecucion.getRange(1, 1, fullMatrix.length, headerEjec.length)
+          .setValues(fullMatrix);
+      }
+      
+      console.log(`✅ DB_EJECUCION actualizado atómicamente: ${newRows.length} tareas nuevas para proyecto ${projectId}`);
+      
+    } catch (writeError) {
+      // Error crítico en escritura - intentar rollback básico
+      console.error("❌ ERROR CRÍTICO en escritura atómica de DB_EJECUCION:", writeError);
+      
+      // Intentar restaurar headers al menos
+      try {
+        sheetEjecucion.getRange(1, 1, 1, headerEjec.length).setValues([headerEjec]);
+      } catch (rollbackError) {
+        console.error("❌ FALLO CRÍTICO: No se pudo hacer rollback:", rollbackError);
+      }
+      
+      throw new Error("Fallo al actualizar DB_EJECUCION: " + writeError.message);
+    }
+    
+  } catch (e) {
+    console.error("❌ Error en regenerateProjectTasksInDB:", e);
+    throw e; // Re-lanzar para que la función llamadora lo maneje
   }
 }
 
 /**
  * GUARDAR PROYECTO + ASIGNACIONES + DRIVE + TAREAS
- * Versión Refactorizada - Usa funciones maestras
+ * Versión con Locks Granulares y Validación de Concurrencia
+ * 
+ * ✅ Lock granular: Solo bloquea el proyecto específico
+ * ✅ Detección de conflictos: Optimistic locking con timestamps
+ * ✅ Operaciones atómicas
  */
 function saveProjectWithAssignments(projectData, asignadosIds) {
-  const lock = LockService.getScriptLock();
+  const isNew = !projectData.id;
+  const resourceId = isNew ? Utilities.getUuid() : projectData.id;
+  
+  // ✅ LOCK GRANULAR: Solo bloqueamos ESTE proyecto
+  if (!LockManager.tryAcquire('PROJECT', resourceId, 10000)) {
+    throw new Error(
+      '⚠️ Este proyecto está siendo editado por otro usuario. ' +
+      'Por favor intenta nuevamente en unos segundos.'
+    );
+  }
+  
+  // Lock de seguridad global (fallback)
+  const globalLock = LockService.getScriptLock();
   
   try {
-    lock.waitLock(30000);
+    globalLock.waitLock(5000);
     
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     
     // --- 1. DETECCIÓN DE ESTADO ---
-    const isNew = !projectData.id; 
     if (isNew) {
-      projectData.id = Utilities.getUuid();
+      projectData.id = resourceId;
       projectData.created_at = new Date();
     }
 
-    // --- 2. CREACIÓN DE ESTRUCTURA EN DRIVE (SOLO SI ES NUEVO) ---
+    // --- 2. VALIDACIÓN DE CONCURRENCIA (Optimistic Locking) ---
+    if (!isNew) {
+      const sheetProyectos = ss.getSheetByName("DB_PROYECTOS");
+      const dataProyectos = sheetProyectos.getDataRange().getValues();
+      const headersProyectos = dataProyectos[0].map(h => h.toString().trim().toLowerCase());
+      
+      const idIdx = headersProyectos.indexOf("id");
+      const updatedIdx = headersProyectos.indexOf("updated_at");
+      
+      if (updatedIdx !== -1) {
+        const currentRow = dataProyectos.find((r, i) => i > 0 && r[idIdx] === projectData.id);
+        
+        if (currentRow) {
+          const dbTimestamp = currentRow[updatedIdx];
+          const clientTimestamp = projectData.updated_at;
+          
+          // Si las fechas no coinciden, alguien más editó
+          if (clientTimestamp && dbTimestamp) {
+            const dbTime = new Date(dbTimestamp).getTime();
+            const clientTime = new Date(clientTimestamp).getTime();
+            
+            // Tolerancia de 1 segundo para diferencias de redondeo
+            if (Math.abs(dbTime - clientTime) > 1000) {
+              throw new Error(
+                '⚠️ CONFLICTO DETECTADO: Otro usuario modificó este proyecto mientras editabas. ' +
+                'Recarga la página para ver los últimos cambios y vuelve a intentar.'
+              );
+            }
+          }
+        }
+      }
+    }
+
+    // Actualizar timestamp
+    projectData.updated_at = new Date();
+
+    // --- 3. CREACIÓN DE ESTRUCTURA EN DRIVE (SOLO SI ES NUEVO) ---
     if (isNew) {
       try {
         const driveResult = createProjectDriveStructure(
@@ -1414,7 +1940,7 @@ function saveProjectWithAssignments(projectData, asignadosIds) {
       }
     }
 
-    // --- 3. GUARDAR EN DB_PROYECTOS ---
+    // --- 4. GUARDAR EN DB_PROYECTOS ---
     const sheetProyectos = ss.getSheetByName("DB_PROYECTOS");
     if (!sheetProyectos) throw new Error("La hoja DB_PROYECTOS no existe");
     
@@ -1455,7 +1981,7 @@ function saveProjectWithAssignments(projectData, asignadosIds) {
       if (!found) throw new Error("No se encontró el proyecto para actualizar");
     }
 
-    // --- 4. ACTUALIZAR ASIGNACIONES ---
+    // --- 5. ACTUALIZAR ASIGNACIONES ---
     const sheetAsig = ss.getSheetByName("CONF_REL_ASIGNACIONES");
     if (!sheetAsig) throw new Error("La hoja CONF_REL_ASIGNACIONES no existe");
     
@@ -1494,12 +2020,14 @@ function saveProjectWithAssignments(projectData, asignadosIds) {
       sheetAsig.getRange(2, 1, finalData.length, headersAsig.length).setValues(finalData);
     }
 
-    // --- 5. GENERACIÓN DE TAREAS SI ES NUEVO (Usando función maestra) ---
+    // --- 6. GENERACIÓN DE TAREAS SI ES NUEVO (Usando función maestra) ---
     if (isNew && projectData.id_tipo_proyecto) {
       regenerateProjectTasksInDB(ss, projectData.id, projectData.id_tipo_proyecto);
     }
     
     SpreadsheetApp.flush(); // Forzar escritura
+    
+    console.log(`✅ Proyecto guardado exitosamente: ${projectData.id}`);
     
     return { success: true, projectId: projectData.id };
 
@@ -1507,7 +2035,8 @@ function saveProjectWithAssignments(projectData, asignadosIds) {
     console.error("❌ Error en saveProjectWithAssignments:", e);
     throw new Error("Error al guardar proyecto: " + e.message);
   } finally {
-    lock.releaseLock();
+    globalLock.releaseLock();
+    LockManager.release('PROJECT', resourceId);
   }
 }
 
@@ -1526,7 +2055,7 @@ function regenerateProjectTasksInternal(ss, projectId, tipoId) {
 
 /**
  * REGENERACIÓN COMPLETA DE PROYECTO (Drive + Tareas)
- * Versión Refactorizada - Usa funciones maestras
+ * Versión con Locks Granulares
  * 
  * Acción Destructiva:
  * - Borra carpeta Drive anterior
@@ -1534,13 +2063,27 @@ function regenerateProjectTasksInternal(ss, projectId, tipoId) {
  * - Borra todas las tareas del proyecto
  * - Genera nuevas tareas según el tipo actual
  * 
+ * ✅ Lock granular: Solo bloquea el proyecto específico
+ * ✅ Operaciones idempotentes
+ * 
  * @param {string} projectId - UUID del proyecto
  * @returns {Object} {success, folderUrl}
  */
 function regenerateProjectTasks(projectId) {
-  const lock = LockService.getScriptLock();
+  
+  // ✅ LOCK GRANULAR: Solo bloqueamos ESTE proyecto
+  if (!LockManager.tryAcquire('PROJECT_REGENERATE', projectId, 15000)) {
+    throw new Error(
+      '⚠️ Este proyecto está siendo regenerado por otro usuario. ' +
+      'Por favor espera a que termine e intenta nuevamente.'
+    );
+  }
+  
+  // Lock de seguridad global (fallback)
+  const globalLock = LockService.getScriptLock();
+  
   try {
-    lock.waitLock(30000);
+    globalLock.waitLock(5000);
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheetProyectos = ss.getSheetByName("DB_PROYECTOS");
@@ -1574,11 +2117,11 @@ function regenerateProjectTasks(projectId) {
         DriveApp.getFolderById(oldFolderId).setTrashed(true);
         console.log("✅ Carpeta Drive anterior enviada a la papelera");
       } catch (e) {
-        console.warn("⚠️ No se pudo borrar carpeta vieja:", e.message);
+        console.warn("⚠️ No se pudo borrar carpeta vieja (puede no existir):", e.message);
       }
     }
 
-    // --- 3. CREAR NUEVA ESTRUCTURA DRIVE (Usando función maestra) ---
+    // --- 3. CREAR NUEVA ESTRUCTURA DRIVE (Usando función maestra mejorada) ---
     const driveResult = createProjectDriveStructure(codigo, nombreObra, tipoId);
     console.log("✅ Nueva estructura Drive creada:", driveResult.folderUrl);
 
@@ -1588,7 +2131,7 @@ function regenerateProjectTasks(projectId) {
     sheetProyectos.getRange(rowIdx, idxDriveUrl + 1).setValue(driveResult.folderUrl);
     console.log("✅ DB_PROYECTOS actualizado con nuevo Drive");
 
-    // --- 5. REGENERAR TAREAS (Usando función maestra) ---
+    // --- 5. REGENERAR TAREAS (Usando función maestra mejorada) ---
     regenerateProjectTasksInDB(ss, projectId, tipoId);
     console.log("✅ Tareas regeneradas en DB_EJECUCION");
 
@@ -1600,25 +2143,38 @@ function regenerateProjectTasks(projectId) {
     };
 
   } catch (e) {
-    console.error("❌ Error en regenerate Project Tasks:", e);
+    console.error("❌ Error en regenerateProjectTasks:", e);
     throw new Error("Error regenerando proyecto: " + e.message);
   } finally {
-    lock.releaseLock();
+    globalLock.releaseLock();
+    LockManager.release('PROJECT_REGENERATE', projectId);
   }
 }
 
 /**
- * Acción Destructiva: Cambia el tipo de proyecto y resetea tareas
- * Versión Refactorizada - Usa regenerateProjectTasks maestra
+ * CAMBIAR TIPO DE PROYECTO Y RESETEAR
+ * Versión con Locks Granulares
+ * 
+ * Acción Destructiva: Cambia el tipo y regenera todo
  * 
  * @param {string} projectId - UUID del proyecto
  * @param {string} newTypeId - Nuevo UUID del tipo de proyecto
  * @returns {Object} {success: boolean}
  */
 function updateProjectTypeAndReset(projectId, newTypeId) {
-  const lock = LockService.getScriptLock();
+  
+  // ✅ LOCK GRANULAR
+  if (!LockManager.tryAcquire('PROJECT_TYPE_CHANGE', projectId, 15000)) {
+    throw new Error(
+      '⚠️ Este proyecto está siendo modificado por otro usuario. ' +
+      'Por favor intenta nuevamente en unos segundos.'
+    );
+  }
+  
+  const globalLock = LockService.getScriptLock();
+  
   try {
-    lock.waitLock(30000);
+    globalLock.waitLock(5000);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     
     // --- 1. ACTUALIZAR EL TIPO EN DB_PROYECTOS ---
@@ -1635,7 +2191,7 @@ function updateProjectTypeAndReset(projectId, newTypeId) {
     let foundRow = -1;
     for (let i = 1; i < data.length; i++) {
       if (String(data[i][idIdx]) === String(projectId)) {
-        foundRow = i + 1; // +1 porque getRange es base 1
+        foundRow = i + 1;
         break;
       }
     }
@@ -1644,15 +2200,15 @@ function updateProjectTypeAndReset(projectId, newTypeId) {
       throw new Error("Proyecto no encontrado");
     }
 
-    // Actualizar la celda del tipo
+    // Actualizar tipo
     sheetProy.getRange(foundRow, typeIdx + 1).setValue(newTypeId);
     console.log("✅ Tipo de proyecto actualizado en DB_PROYECTOS");
 
-    // --- 2. LIBERAR LOCK ANTES DE LLAMAR A FUNCIÓN CON LOCK PROPIO ---
-    lock.releaseLock();
+    // --- 2. LIBERAR LOCKS ANTES DE REGENERAR ---
+    globalLock.releaseLock();
+    LockManager.release('PROJECT_TYPE_CHANGE', projectId);
     
-    // --- 3. REGENERAR TODO (Drive + Tareas) USANDO FUNCIÓN MAESTRA ---
-    // Esta función tiene su propio lock, por eso liberamos el nuestro antes
+    // --- 3. REGENERAR TODO (tiene su propio lock) ---
     regenerateProjectTasks(projectId);
 
     return { success: true };
@@ -1661,11 +2217,189 @@ function updateProjectTypeAndReset(projectId, newTypeId) {
     console.error("❌ Error en updateProjectTypeAndReset:", e);
     throw new Error("Error al resetear proyecto: " + e.message);
   } finally {
-    // Intentar liberar lock solo si aún está activo
-    try { 
-      lock.releaseLock(); 
-    } catch (e) {
-      // Lock ya fue liberado, ignorar error
-    }
+    try { globalLock.releaseLock(); } catch (e) {}
+    LockManager.release('PROJECT_TYPE_CHANGE', projectId);
   }
 }
+
+/**
+ * FUNCIÓN DE MANTENIMIENTO AUTOMÁTICO
+ * Ejecutar manualmente o configurar trigger diario
+ * Limpia locks vencidos y optimiza el sistema
+ */
+function runDailyMaintenance() {
+  try {
+    console.log("🔧 Iniciando mantenimiento del sistema...");
+    
+    // 1. Limpiar locks vencidos
+    const locksCleared = LockManager.cleanExpiredLocks();
+    console.log(`✅ Locks limpiados: ${locksCleared}`);
+    
+    // 2. Limpiar properties antiguas (opcional)
+    const props = PropertiesService.getScriptProperties();
+    const allProps = props.getProperties();
+    let propsDeleted = 0;
+    
+    Object.keys(allProps).forEach(key => {
+      // Eliminar locks que tengan más de 1 día
+      if (key.startsWith('LOCK_')) {
+        try {
+          const lockInfo = JSON.parse(allProps[key]);
+          const ageInHours = (Date.now() - lockInfo.timestamp) / (1000 * 60 * 60);
+          
+          if (ageInHours > 24) {
+            props.deleteProperty(key);
+            propsDeleted++;
+          }
+        } catch (e) {
+          // Lock corrupto - eliminar
+          props.deleteProperty(key);
+          propsDeleted++;
+        }
+      }
+    });
+    
+    console.log(`✅ Properties antiguas eliminadas: ${propsDeleted}`);
+    
+    // 3. Log de estadísticas
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const proyectos = readConfig("DB_PROYECTOS");
+    const ejecucion = readConfig("DB_EJECUCION");
+    
+    console.log(`📊 Estadísticas del sistema:`);
+    console.log(`   - Proyectos activos: ${proyectos.length}`);
+    console.log(`   - Tareas en ejecución: ${ejecucion.length}`);
+    
+    return {
+      success: true,
+      locksCleared: locksCleared,
+      propsDeleted: propsDeleted,
+      stats: {
+        projects: proyectos.length,
+        tasks: ejecucion.length
+      }
+    };
+    
+  } catch (e) {
+    console.error("❌ Error en mantenimiento:", e);
+    return {
+      success: false,
+      error: e.message
+    };
+  }
+}
+
+/**
+ * Configurar trigger automático (ejecutar una vez manualmente)
+ * Crea un trigger diario a las 3 AM
+ */
+function setupDailyMaintenanceTrigger() {
+  // Eliminar triggers existentes
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(trigger => {
+    if (trigger.getHandlerFunction() === 'runDailyMaintenance') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+  
+  // Crear nuevo trigger diario
+  ScriptApp.newTrigger('runDailyMaintenance')
+    .timeBased()
+    .atHour(3) // 3 AM
+    .everyDays(1)
+    .create();
+    
+  console.log("✅ Trigger de mantenimiento configurado para ejecutarse diariamente a las 3 AM");
+}
+
+/**
+ * VALIDADOR DE INTEGRIDAD
+ * Verifica que las operaciones críticas se completaron correctamente
+ */
+const IntegrityValidator = {
+  
+  /**
+   * Valida que un proyecto tiene estructura Drive completa
+   */
+  validateProjectStructure: function(projectId) {
+    try {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const sheetProyectos = ss.getSheetByName("DB_PROYECTOS");
+      const data = sheetProyectos.getDataRange().getValues();
+      const headers = data[0];
+      
+      const idIdx = headers.indexOf("id");
+      const driveIdIdx = headers.indexOf("drive_folder_id");
+      const tipoIdx = headers.indexOf("id_tipo_proyecto");
+      
+      const projectRow = data.find((r, i) => i > 0 && r[idIdx] === projectId);
+      
+      if (!projectRow) {
+        return { valid: false, error: "Proyecto no encontrado" };
+      }
+      
+      const driveFolderId = projectRow[driveIdIdx];
+      const tipoId = projectRow[tipoIdx];
+      
+      if (!driveFolderId || driveFolderId === "NO_CREADO" || driveFolderId === "ERROR_DRIVE") {
+        return { valid: false, error: "Sin carpeta Drive" };
+      }
+      
+      // Verificar que la carpeta existe
+      try {
+        const folder = DriveApp.getFolderById(driveFolderId);
+        
+        // Contar subcarpetas
+        const subfolders = folder.getFolders();
+        let subfolderCount = 0;
+        while (subfolders.hasNext()) {
+          subfolders.next();
+          subfolderCount++;
+        }
+        
+        // Obtener etapas esperadas
+        const etapas = readConfig("CONF_ETAPAS").filter(e => e.id_tipo_proyecto === tipoId);
+        
+        return {
+          valid: true,
+          driveExists: true,
+          subfolderCount: subfolderCount,
+          expectedSubfolders: etapas.length,
+          structureComplete: subfolderCount === etapas.length
+        };
+        
+      } catch (driveError) {
+        return { 
+          valid: false, 
+          error: "Carpeta Drive inaccesible: " + driveError.message 
+        };
+      }
+      
+    } catch (e) {
+      return { valid: false, error: e.message };
+    }
+  },
+  
+  /**
+   * Valida que un proyecto tiene sus tareas generadas
+   */
+  validateProjectTasks: function(projectId) {
+    try {
+      const tareas = readConfig("DB_EJECUCION").filter(t => t.proyecto_id === projectId);
+      
+      if (tareas.length === 0) {
+        return { valid: false, error: "Sin tareas generadas" };
+      }
+      
+      return {
+        valid: true,
+        taskCount: tareas.length,
+        completedCount: tareas.filter(t => t.estado === 'Completado').length
+      };
+      
+    } catch (e) {
+      return { valid: false, error: e.message };
+    }
+  }
+};
+

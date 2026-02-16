@@ -3343,15 +3343,18 @@
           loading.value = true;
 
           // 2. Preparar los datos
-          // Hacemos una copia limpia del formulario
           const projectData = JSON.parse(JSON.stringify(form.value));
-          
-          // Extraemos la lista de IDs de los checkboxes (si no existe, array vacío)
           const asignadosList = form.value.asignados || []; 
-          
-          // IMPORTANTE: Borramos 'asignados' del objeto projectData antes de enviarlo
-          // porque la tabla DB_PROYECTOS no tiene esa columna, eso va a REL_ASIGNACIONES.
-          delete projectData.asignados; 
+          delete projectData.asignados;
+
+          // ✅ CAPTURAR TIMESTAMP ACTUAL PARA VALIDACIÓN DE CONCURRENCIA
+          if (!projectData.id) {
+            // Proyecto nuevo - no necesita timestamp de validación
+            projectData.created_at = new Date().toISOString();
+          } else {
+            // Proyecto existente - mantener updated_at para validación
+            // (El backend lo comparará con el de la BD)
+          }
 
           // 3. Lógica de Guardado
 
@@ -3404,8 +3407,38 @@
               })
               .withFailureHandler(e => {
                 loading.value = false;
-                console.error(e);
-                Swal.fire('Error', 'No se pudo guardar: ' + e.message, 'error');
+                
+                // Manejo especial para conflictos de concurrencia
+                if (e.message.includes('CONFLICTO')) {
+                  Swal.fire({
+                    icon: 'warning',
+                    title: 'Conflicto Detectado',
+                    html: e.message,
+                    confirmButtonText: 'Recargar Datos',
+                    showCancelButton: true,
+                    cancelButtonText: 'Cancelar'
+                  }).then((result) => {
+                    if (result.isConfirmed) {
+                      // Recargar datos del proyecto
+                      modales.proyecto.hide();
+                      loadData();
+                    }
+                  });
+                } 
+                // Manejo especial para locks
+                else if (e.message.includes('está siendo editado')) {
+                  Swal.fire({
+                    icon: 'info',
+                    title: 'Proyecto Ocupado',
+                    text: e.message,
+                    confirmButtonText: 'Entendido',
+                    timer: 5000
+                  });
+                }
+                // Otros errores
+                else {
+                  Swal.fire('Error', 'No se pudo guardar: ' + e.message, 'error');
+                }
               })
               .saveProjectWithAssignments(projectData, asignadosList);
           }
@@ -3933,34 +3966,35 @@
               break;
 
             case 'proyecto':
-              const tipoDefault = tipos.value.length > 0 ? tipos.value[0].id : '';
-              const etapaInicial = etapas.value.length > 0 ? etapas.value[0].nombre_etapa : '';
-              
-              originalTypeId.value = d ? d.id_tipo_proyecto : null;
+            const tipoDefault = tipos.value.length > 0 ? tipos.value[0].id : '';
+            const etapaInicial = etapas.value.length > 0 ? etapas.value[0].nombre_etapa : '';
+            
+            originalTypeId.value = d ? d.id_tipo_proyecto : null;
 
-              // Gestión de Asignaciones (Traceabilidad)
-              let asignadosIds = [];
-              if (d && d.id) {
-                asignadosIds = allAsignaciones.value
-                  .filter(a => a.id_proyecto === d.id)
-                  .map(a => a.id_profesional);
-              } else if (currentUserProfile.value?.id) {
-                asignadosIds.push(currentUserProfile.value.id);
-              }
+            // Gestión de Asignaciones (Traceabilidad)
+            let asignadosIds = [];
+            if (d && d.id) {
+              asignadosIds = allAsignaciones.value
+                .filter(a => a.id_proyecto === d.id)
+                .map(a => a.id_profesional);
+            } else if (currentUserProfile.value?.id) {
+              asignadosIds.push(currentUserProfile.value.id);
+            }
 
-              form.value = d ? { 
-                ...d,
-                fecha_inicio: toInputDate(d.fecha_inicio), // Helper para formato YYYY-MM-DD
-                fecha_fin: toInputDate(d.fecha_fin),
-                asignados: asignadosIds
-              } : { 
-                codigo: '', 
-                nombre_obra: '', 
-                estado: etapaInicial,
-                id_tipo_proyecto: tipoDefault,
-                asignados: asignadosIds
-              };
-              break;
+            form.value = d ? { 
+              ...d,
+              fecha_inicio: toInputDate(d.fecha_inicio),
+              fecha_fin: toInputDate(d.fecha_fin),
+              asignados: asignadosIds,
+              updated_at: d.updated_at || new Date().toISOString() // ← CAPTURAR TIMESTAMP
+            } : { 
+              codigo: '', 
+              nombre_obra: '', 
+              estado: etapaInicial,
+              id_tipo_proyecto: tipoDefault,
+              asignados: asignadosIds
+            };
+            break;
 
             default:
               console.warn(`[GAS Expert] El tipo de modal "${t}" no está definido en el switch.`);
