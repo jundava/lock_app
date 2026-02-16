@@ -452,6 +452,131 @@
       color: var(--color-base);
     }
 
+    /* --- ESTILOS GANTT CHART --- */
+.gantt-container {
+  overflow-x: auto;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  position: relative;
+}
+
+.gantt-header {
+  display: flex;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #ddd;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.gantt-header-cell {
+  flex-shrink: 0;
+  border-right: 1px solid #eee;
+  padding: 8px;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: bold;
+  color: #666;
+  background: #f8f9fa;
+}
+
+.gantt-body {
+  position: relative;
+  min-height: 200px;
+}
+
+.gantt-row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #f0f0f0;
+  height: 45px; /* Altura de fila */
+  position: relative;
+}
+
+.gantt-row:hover {
+  background-color: #fafafa;
+}
+
+/* Columna lateral fija (Nombre proyecto) */
+.gantt-sidebar-item {
+  position: sticky;
+  left: 0;
+  background: white;
+  z-index: 5;
+  width: 200px; /* Ancho fijo nombre */
+  padding: 0 10px;
+  border-right: 2px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  height: 45px;
+  box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+}
+
+.gantt-timeline-wrapper {
+  flex-grow: 1;
+  position: relative;
+  height: 100%;
+}
+
+/* Líneas verticales de fondo */
+.gantt-grid-lines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  pointer-events: none;
+}
+
+.gantt-grid-line {
+  border-right: 1px dashed #eee;
+  flex-shrink: 0;
+  height: 100%;
+}
+
+/* La barra del proyecto */
+.gantt-bar {
+  position: absolute;
+  top: 10px; /* Centrado verticalmente (45px altura - 25px barra) / 2 */
+  height: 25px;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.gantt-bar:hover {
+  transform: translateY(-1px);
+  filter: brightness(0.95);
+  z-index: 20; /* Que sobresalga al hover */
+}
+
+/* Barra de progreso interna */
+.gantt-bar-progress {
+  height: 100%;
+  background-color: rgba(255,255,255,0.3);
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.gantt-bar-label {
+  position: sticky;
+  left: 5px;
+  font-size: 0.7rem;
+  color: white;
+  padding-left: 5px;
+  font-weight: bold;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  z-index: 2;
+}
+
   </style>
 </head>
 
@@ -952,10 +1077,6 @@
                 <h3 class="fw-bold" style="color: #556B2F;">
                     <i class="bi bi-speedometer2 me-2"></i>Panel de Control
                 </h3>
-                <div class="input-group w-25">
-                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
-                    <input type="text" class="form-control border-start-0 ps-0" v-model="searchQuery" placeholder="Filtrar proyectos...">
-                </div>
             </div>
 
             <div class="row g-3 mb-4">
@@ -1012,9 +1133,9 @@
               <small class="text-muted">Gestión Operativa</small>
             </div>
             <div class="d-flex gap-2">
-              <div class="input-group input-group-sm shadow-sm" style="width: 200px;">
+              <div class="input-group input-group-sm shadow-sm" style="width: 300px;">
                 <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
-                <input type="text" v-model="searchQuery" class="form-control border-start-0" placeholder="Buscar obra...">
+                <input type="text" v-model="searchQuery" class="form-control border-start-0" placeholder="Buscar proyectos...">
               </div>
               <button class="btn btn-expert d-flex align-items-center shadow-sm" 
                       @click="openModal('proyecto')"
@@ -1486,7 +1607,7 @@
           <div class="card border-0 shadow-sm mb-3">
             <div class="card-body p-3">
               <div class="row align-items-center">
-                
+
                 <!-- Título de la sección -->
                 <div class="col-md-3">
                   <h5 class="mb-0 fw-bold text-dark">
@@ -1494,7 +1615,7 @@
                     Proyectos Filtrados
                   </h5>
                   <small class="text-muted">
-                    {{ reportProyectosFiltrados.length }} 
+                    {{ reportProyectosFiltrados.length }}
                     {{ reportProyectosFiltrados.length === 1 ? 'proyecto encontrado' : 'proyectos encontrados' }}
                   </small>
                 </div>
@@ -1502,44 +1623,44 @@
                 <!-- Opciones de Ordenamiento -->
                 <div class="col-md-9">
                   <div class="d-flex align-items-center justify-content-end gap-2 flex-wrap">
-                    
+
                     <!-- Label -->
-                    <div class="text-muted small fw-bold text-uppercase d-none d-md-block" style="white-space: nowrap; letter-spacing: 0.5px;">
+                    <div class="text-muted small fw-bold text-uppercase d-none d-md-block"
+                      style="white-space: nowrap; letter-spacing: 0.5px;">
                       <i class="bi bi-sort-down me-1"></i>Ordenar:
                     </div>
-
                     <!-- Botones de campo -->
                     <div class="btn-group shadow-sm" role="group">
-                      <input type="radio" class="btn-check" name="sortField" id="sortNombre" 
-                            @click="setSortField('nombre')" :checked="reportSort.field === 'nombre'">
+                      <input type="radio" class="btn-check" name="sortField" id="sortNombre" @click="setSortField('nombre')"
+                        :checked="reportSort.field === 'nombre'">
                       <label class="btn btn-outline-expert btn-sm" for="sortNombre">
                         <i class="bi bi-tag d-md-none"></i>
                         <span class="d-none d-md-inline"><i class="bi bi-tag me-1"></i>Nombre</span>
                       </label>
 
-                      <input type="radio" class="btn-check" name="sortField" id="sortCodigo" 
-                            @click="setSortField('codigo')" :checked="reportSort.field === 'codigo'">
+                      <input type="radio" class="btn-check" name="sortField" id="sortCodigo" @click="setSortField('codigo')"
+                        :checked="reportSort.field === 'codigo'">
                       <label class="btn btn-outline-expert btn-sm" for="sortCodigo">
                         <i class="bi bi-hash d-md-none"></i>
                         <span class="d-none d-md-inline"><i class="bi bi-hash me-1"></i>Código</span>
                       </label>
 
-                      <input type="radio" class="btn-check" name="sortField" id="sortProgreso" 
-                            @click="setSortField('progreso_global')" :checked="reportSort.field === 'progreso_global'">
+                      <input type="radio" class="btn-check" name="sortField" id="sortProgreso"
+                        @click="setSortField('progreso_global')" :checked="reportSort.field === 'progreso_global'">
                       <label class="btn btn-outline-expert btn-sm" for="sortProgreso">
                         <i class="bi bi-bar-chart d-md-none"></i>
                         <span class="d-none d-md-inline"><i class="bi bi-bar-chart me-1"></i>Avance</span>
                       </label>
 
-                      <input type="radio" class="btn-check" name="sortField" id="sortFechaInicio" 
-                            @click="setSortField('fecha_inicio')" :checked="reportSort.field === 'fecha_inicio'">
+                      <input type="radio" class="btn-check" name="sortField" id="sortFechaInicio"
+                        @click="setSortField('fecha_inicio')" :checked="reportSort.field === 'fecha_inicio'">
                       <label class="btn btn-outline-expert btn-sm" for="sortFechaInicio">
                         <i class="bi bi-calendar-event d-md-none"></i>
                         <span class="d-none d-md-inline"><i class="bi bi-calendar-event me-1"></i>F. Inicio</span>
                       </label>
 
-                      <input type="radio" class="btn-check" name="sortField" id="sortFechaFin" 
-                            @click="setSortField('fecha_fin')" :checked="reportSort.field === 'fecha_fin'">
+                      <input type="radio" class="btn-check" name="sortField" id="sortFechaFin" @click="setSortField('fecha_fin')"
+                        :checked="reportSort.field === 'fecha_fin'">
                       <label class="btn btn-outline-expert btn-sm" for="sortFechaFin">
                         <i class="bi bi-calendar-check d-md-none"></i>
                         <span class="d-none d-md-inline"><i class="bi bi-calendar-check me-1"></i>F. Fin</span>
@@ -1547,10 +1668,10 @@
                     </div>
 
                     <!-- Botón de orden ascendente/descendente -->
-                    <button class="btn btn-outline-expert btn-sm shadow-sm d-flex align-items-center" 
-                            @click="toggleSortOrder"
-                            :title="reportSort.order === 'asc' ? 'Orden ascendente' : 'Orden descendente'">
-                      <i class="bi me-1" :class="reportSort.order === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-down-alt'"></i>
+                    <button class="btn btn-outline-expert btn-sm shadow-sm d-flex align-items-center" @click="toggleSortOrder"
+                      :title="reportSort.order === 'asc' ? 'Orden ascendente' : 'Orden descendente'">
+                      <i class="bi me-1"
+                        :class="reportSort.order === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-down-alt'"></i>
                       <span class="d-none d-lg-inline">
                         {{ reportSort.order === 'asc' ? 'A → Z' : 'Z → A' }}
                       </span>
@@ -1559,21 +1680,70 @@
                     <!-- Separador vertical -->
                     <div class="vr d-none d-md-block" style="height: 30px; opacity: 0.3;"></div>
 
+                    <div class="bg-light p-1 rounded border d-flex me-3">
+                      <button class="btn btn-sm border-0 rounded transition-effect"
+                        :class="reportViewMode === 'list' ? 'bg-white shadow-sm text-expert fw-bold' : 'text-muted'"
+                        @click="reportViewMode = 'list'">
+                        <i class="bi bi-list-task me-1"></i> Lista
+                      </button>
+                      <button class="btn btn-sm border-0 rounded transition-effect"
+                        :class="reportViewMode === 'gantt' ? 'bg-white shadow-sm text-expert fw-bold' : 'text-muted'"
+                        @click="reportViewMode = 'gantt'">
+                        <i class="bi bi-kanban me-1"></i> Gantt
+                      </button>
+                    </div>
+
                     <!-- Botón de Imprimir/Exportar PDF -->
-                    <button class="btn btn-expert btn-sm shadow-sm d-flex align-items-center gap-1" 
-                            @click="exportReportToPDF"
-                            :disabled="reportProyectosFiltrados.length === 0 || loading">
+                    <button class="btn btn-expert btn-sm shadow-sm d-flex align-items-center gap-1" @click="exportReportToPDF"
+                      :disabled="reportProyectosFiltrados.length === 0 || loading">
                       <i class="bi bi-file-earmark-pdf fs-6"></i>
                       <span class="d-none d-sm-inline">Exportar PDF</span>
                     </button>
 
+
+
+                    <div v-if="reportViewMode === 'list'" class="d-flex gap-2">
+                      <div class="btn-group shadow-sm" role="group">
+                        <input type="radio" class="btn-check" name="sortField" id="sortNombre" @click="setSortField('nombre')"
+                          :checked="reportSort.field === 'nombre'">
+                        <label class="btn btn-outline-expert btn-sm" for="sortNombre"><i class="bi bi-tag"></i></label>
+
+                        <input type="radio" class="btn-check" name="sortField" id="sortProgreso"
+                          @click="setSortField('progreso_global')" :checked="reportSort.field === 'progreso_global'">
+                        <label class="btn btn-outline-expert btn-sm" for="sortProgreso"><i class="bi bi-bar-chart"></i></label>
+
+                        <input type="radio" class="btn-check" name="sortField" id="sortFechaInicio"
+                          @click="setSortField('fecha_inicio')" :checked="reportSort.field === 'fecha_inicio'">
+                        <label class="btn btn-outline-expert btn-sm" for="sortFechaInicio"><i class="bi bi-calendar"></i></label>
+                      </div>
+                      <button class="btn btn-outline-expert btn-sm shadow-sm" @click="toggleSortOrder">
+                        <i class="bi" :class="reportSort.order === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-down-alt'"></i>
+                      </button>
+                    </div>
+
+                    <div v-if="reportViewMode === 'gantt'" class="d-flex gap-1 align-items-center">
+                      <span class="small text-muted me-2 fw-bold">Zoom:</span>
+                      <select v-model="ganttScale" class="form-select form-select-sm" style="width: 120px;">
+                        <option value="quarter">Trimestral</option>
+                        <option value="semester">Semestral</option>
+                        <option value="year">Anual</option>
+                      </select>
+                    </div>
+
+                    <div class="vr d-none d-md-block mx-2" style="height: 20px;"></div>
+
+                    <button class="btn btn-expert btn-sm shadow-sm" @click="exportReportToPDF"
+                      :disabled="reportProyectosFiltrados.length === 0 || loading">
+                      <i class="bi bi-file-earmark-pdf"></i>
+                    </button>
+
                   </div>
                 </div>
-
               </div>
             </div>
           </div>
 
+          <div v-if="reportViewMode === 'list'">
           <!-- Lista de Proyectos en Acordeón -->
           <div v-if="reportProyectosFiltrados.length === 0" class="alert alert-warning text-center">
             <i class="bi bi-funnel display-4 opacity-25 d-block mb-2"></i>
@@ -1581,15 +1751,15 @@
           </div>
 
           <div v-else class="accordion" id="reportAccordion">
-            <div v-for="(proyecto, index) in reportProyectosFiltrados" :key="proyecto.id" 
-                class="accordion-item border-0 shadow-sm mb-3 rounded overflow-hidden">
-              
+            <div v-for="(proyecto, index) in reportProyectosFiltrados" :key="proyecto.id"
+              class="accordion-item border-0 shadow-sm mb-3 rounded overflow-hidden">
+
               <!-- Nivel 1: Cabecera del Proyecto -->
               <h2 class="accordion-header">
-                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
-                        :data-bs-target="'#proyecto_'+index" :aria-controls="'proyecto_'+index">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                  :data-bs-target="'#proyecto_'+index" :aria-controls="'proyecto_'+index">
                   <div class="d-flex align-items-center w-100 pe-3">
-                    
+
                     <!-- Indicador de tipo -->
                     <div class="me-3">
                       <span class="badge" :style="{backgroundColor: proyecto.tipo_color}">
@@ -1606,7 +1776,8 @@
                       <div class="small text-muted">
                         <i class="bi bi-building me-1"></i>{{ proyecto.cliente }}
                         <i class="bi bi-geo-alt ms-3 me-1"></i>{{ proyecto.ubicacion }}
-                        <i class="bi bi-calendar-range ms-3 me-1"></i>{{ formatDate(proyecto.fecha_inicio) }} - {{ formatDate(proyecto.fecha_fin) }}
+                        <i class="bi bi-calendar-range ms-3 me-1"></i>{{ formatDate(proyecto.fecha_inicio) }} - {{
+                        formatDate(proyecto.fecha_fin) }}
                       </div>
                     </div>
 
@@ -1623,8 +1794,8 @@
 
                     <!-- Etapa actual -->
                     <div class="text-end" style="min-width: 120px;">
-                      <span class="badge rounded-pill px-3" 
-                            :style="{backgroundColor: proyecto.etapa_color + '20', color: proyecto.etapa_color, borderColor: proyecto.etapa_color}">
+                      <span class="badge rounded-pill px-3"
+                        :style="{backgroundColor: proyecto.etapa_color + '20', color: proyecto.etapa_color, borderColor: proyecto.etapa_color}">
                         {{ proyecto.etapa_actual }}
                       </span>
                     </div>
@@ -1636,7 +1807,7 @@
               <!-- Nivel 1: Contenido del Proyecto -->
               <div :id="'proyecto_'+index" class="accordion-collapse collapse" data-bs-parent="#reportAccordion">
                 <div class="accordion-body p-0 bg-light">
-                  
+
                   <!-- Info adicional del proyecto -->
                   <div class="p-3 bg-white border-bottom">
                     <div class="row g-3">
@@ -1644,15 +1815,15 @@
                         <strong class="small text-muted d-block mb-1">Equipo Asignado</strong>
                         <div v-if="proyecto.equipo.length === 0" class="small text-muted fst-italic">Sin asignar</div>
                         <div v-else class="d-flex flex-wrap gap-1">
-                          <span v-for="miembro in proyecto.equipo" :key="miembro.id" 
-                                class="badge bg-light text-dark border small">
+                          <span v-for="miembro in proyecto.equipo" :key="miembro.id"
+                            class="badge bg-light text-dark border small">
                             {{ miembro.nombre }} ({{ miembro.rol }})
                           </span>
                         </div>
                       </div>
                       <div class="col-md-4">
                         <strong class="small text-muted d-block mb-1">Carpeta Drive</strong>
-                        <a v-if="proyecto.drive_url" :href="proyecto.drive_url" target="_blank" 
+                        <a v-if="proyecto.drive_url" :href="proyecto.drive_url" target="_blank"
                           class="btn btn-sm btn-outline-primary">
                           <i class="bi bi-folder2-open me-1"></i>Abrir en Drive
                         </a>
@@ -1663,7 +1834,8 @@
                         <div class="small">
                           <i class="bi bi-list-task me-1"></i>{{ getProyectoTotalTareas(proyecto) }} tareas
                           <span class="ms-2">
-                            <i class="bi bi-check-circle text-success me-1"></i>{{ getProyectoTareasCompletadas(proyecto) }} completadas
+                            <i class="bi bi-check-circle text-success me-1"></i>{{ getProyectoTareasCompletadas(proyecto) }}
+                            completadas
                           </span>
                         </div>
                       </div>
@@ -1672,17 +1844,18 @@
 
                   <!-- Nivel 2: Acordeón de Etapas -->
                   <div class="accordion" :id="'etapas_'+index">
-                    <div v-for="(etapa, etapaIndex) in proyecto.etapas" :key="etapa.id" 
-                        class="accordion-item border-0 border-bottom">
-                      
+                    <div v-for="(etapa, etapaIndex) in proyecto.etapas" :key="etapa.id"
+                      class="accordion-item border-0 border-bottom">
+
                       <h2 class="accordion-header">
                         <button class="accordion-button collapsed bg-light" type="button" data-bs-toggle="collapse"
-                                :data-bs-target="'#etapa_'+index+'_'+etapaIndex">
+                          :data-bs-target="'#etapa_'+index+'_'+etapaIndex">
                           <div class="d-flex align-items-center w-100 pe-3">
-                            
+
                             <div class="me-3">
-                              <div class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold shadow-sm"
-                                  :style="{width:'32px', height:'32px', backgroundColor: etapa.color, fontSize: '0.8rem'}">
+                              <div
+                                class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold shadow-sm"
+                                :style="{width:'32px', height:'32px', backgroundColor: etapa.color, fontSize: '0.8rem'}">
                                 {{ etapa.orden }}
                               </div>
                             </div>
@@ -1700,7 +1873,8 @@
                                 <strong>{{ etapa.progreso }}%</strong>
                               </div>
                               <div class="progress" style="height: 4px;">
-                                <div class="progress-bar" :style="{width: etapa.progreso + '%', backgroundColor: etapa.color}"></div>
+                                <div class="progress-bar" :style="{width: etapa.progreso + '%', backgroundColor: etapa.color}">
+                                </div>
                               </div>
                             </div>
 
@@ -1723,8 +1897,7 @@
                             <tbody>
                               <tr v-for="tarea in etapa.tareas" :key="tarea.id">
                                 <td class="text-center">
-                                  <i v-if="tarea.estado === 'Completado'" 
-                                    class="bi bi-check-circle-fill text-success fs-5"></i>
+                                  <i v-if="tarea.estado === 'Completado'" class="bi bi-check-circle-fill text-success fs-5"></i>
                                   <i v-else class="bi bi-circle text-muted fs-5"></i>
                                 </td>
                                 <td>
@@ -1743,7 +1916,8 @@
                                   <span v-else class="text-muted small fst-italic">Sin archivo</span>
                                 </td>
                                 <td>
-                                  <div class="small text-muted text-truncate" style="max-width: 200px;" :title="tarea.comentarios">
+                                  <div class="small text-muted text-truncate" style="max-width: 200px;"
+                                    :title="tarea.comentarios">
                                     {{ tarea.comentarios || '—' }}
                                   </div>
                                 </td>
@@ -1761,8 +1935,66 @@
 
             </div>
           </div>
-
         </div>
+
+        <div v-else class="fade-in">
+          <div v-if="reportProyectosFiltrados.length === 0" class="alert alert-warning text-center">
+            No hay datos para mostrar en el Gantt.
+          </div>
+
+          <div v-else class="gantt-container shadow-sm">
+
+            <div class="gantt-header" style="left: 200px; /* Ancho del sidebar */">
+              <div class="gantt-sidebar-item bg-light text-muted small fw-bold text-uppercase">
+                
+              </div>
+              <div v-for="mes in ganttTimeline" :key="mes.key" class="gantt-header-cell"
+                :style="{ width: ganttColumnWidth + 'px' }">
+                {{ mes.label }} <br> <span style="font-size: 0.6rem; color: #999;">{{ mes.year }}</span>
+              </div>
+            </div>
+
+            <div class="gantt-body">
+
+              <div class="gantt-grid-lines" style="left: 200px; /* Ancho del sidebar */">
+                <div v-for="mes in ganttTimeline" :key="'line_'+mes.key" class="gantt-grid-line"
+                  :style="{ width: ganttColumnWidth + 'px' }">
+                </div>
+              </div>
+
+              <div v-for="p in reportProyectosFiltrados" :key="p.id" class="gantt-row">
+
+                <div class="gantt-sidebar-item">
+                  <div class="text-truncate w-100" :title="p.nombre">
+                    <div class="fw-bold text-dark small">{{ p.nombre }}</div>
+                    <div class="text-muted" style="font-size: 0.65rem;">{{ p.etapa_actual }}</div>
+                  </div>
+                </div>
+
+                <div class="gantt-timeline-wrapper">
+                  <div class="gantt-bar" v-if="p.fecha_inicio && p.fecha_fin" :style="getGanttBarStyle(p)"
+                    :title="`${p.nombre}: ${formatDate(p.fecha_inicio)} - ${formatDate(p.fecha_fin)} (${p.progreso_global}%)`">
+
+                    <div class="gantt-bar-progress" :style="{ width: p.progreso_global + '%' }"></div>
+
+                    <span class="gantt-bar-label">{{ p.progreso_global }}%</span>
+                  </div>
+
+                  <div v-else class="ps-3 text-muted small fst-italic d-flex align-items-center h-100">
+                    <i class="bi bi-exclamation-circle me-1"></i> Sin fechas definidas
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+          <div class="mt-2 small text-muted text-end">
+            <i class="bi bi-info-circle me-1"></i> Mostrando rango de fechas basado en los proyectos filtrados.
+          </div>
+        </div>
+
+
+        </div> <!-- ========== CIERRE VISTA DE REPORTES ========== -->
 
       </main>
 
@@ -2217,6 +2449,9 @@
 
         const executionTasks = ref([]);
 
+        const reportViewMode = ref('list'); 
+        const ganttScale = ref('semester'); 
+
         // --- 2. DATOS MAESTROS ---
         const config = ref({ driveUrl: '' });
         const tipos = ref([]);
@@ -2529,6 +2764,69 @@
         };
 
         // --- COMPUTED PROPERTIES ---
+
+        // --- LÓGICA GANTT ---
+
+        // 1. Calcula el ancho de columna (px) según el zoom seleccionado
+        const ganttColumnWidth = computed(() => {
+            switch(ganttScale.value) {
+                case 'quarter': return 200; // Trimestral: Columnas anchas
+                case 'semester': return 120; // Semestral: Columnas medias
+                case 'year': return 60;     // Anual: Columnas estrechas (tipo pájaro)
+                default: return 120;
+            }
+        });
+
+        // 2. Determina el rango de fechas (Min y Max) de TODOS los proyectos filtrados
+        const ganttRange = computed(() => {
+            const proyectos = reportProyectosFiltrados.value;
+            if (proyectos.length === 0) return { start: new Date(), end: new Date() };
+
+            let min = new Date('2030-01-01');
+            let max = new Date('2020-01-01');
+            let hasDates = false;
+
+            proyectos.forEach(p => {
+                if (p.fecha_inicio) {
+                    const d = new Date(p.fecha_inicio);
+                    if (d < min) min = d;
+                    hasDates = true;
+                }
+                if (p.fecha_fin) {
+                    const d = new Date(p.fecha_fin);
+                    if (d > max) max = d;
+                    hasDates = true;
+                }
+            });
+
+            if (!hasDates) return { start: new Date(), end: new Date() };
+
+            // Agregar un "buffer" de 1 mes antes y después para que se vea bonito
+            min = new Date(min.getFullYear(), min.getMonth() - 3, 1);
+            max = new Date(max.getFullYear(), max.getMonth() + 9, 0);
+
+            return { start: min, end: max };
+        });
+
+        // 3. Genera el array de meses para la cabecera
+        const ganttTimeline = computed(() => {
+            const { start, end } = ganttRange.value;
+            const months = [];
+            const current = new Date(start);
+
+            while (current <= end) {
+                months.push({
+                    key: current.toISOString(),
+                    label: current.toLocaleDateString('es-ES', { month: 'short' }).toUpperCase(), // ENE, FEB
+                    year: current.getFullYear(),
+                    dateObj: new Date(current) // Guardamos fecha real para cálculos
+                });
+                current.setMonth(current.getMonth() + 1);
+            }
+            return months;
+        });
+
+
         const userInitial = computed(() => userEmail.value ? userEmail.value[0].toUpperCase() : 'U');
 
         const profesionalesFiltrados = computed(() => {
@@ -2572,6 +2870,40 @@
                        (p.estado || '').toLowerCase().includes(q);
             });
         });
+
+
+        // --- HELPER GANTT: Calcular posición CSS ---
+        const getGanttBarStyle = (p) => {
+            if (!p.fecha_inicio || !p.fecha_fin) return {};
+
+            const rangeStart = ganttRange.value.start;
+            const start = new Date(p.fecha_inicio);
+            const end = new Date(p.fecha_fin);
+            
+            // 1. Calcular diferencia en milisegundos desde el inicio del gráfico
+            const diffStart = start - rangeStart;
+            const duration = end - start;
+
+            // 2. Convertir a "Meses" aproximados para multiplicar por el ancho de columna
+            // Un mes promedio = 30.44 días = 2629746000 ms
+            const msPerMonth = 2629746000;
+            
+            // Posición Left (en px)
+            const leftPx = (diffStart / msPerMonth) * ganttColumnWidth.value;
+            
+            // Ancho (en px)
+            let widthPx = (duration / msPerMonth) * ganttColumnWidth.value;
+            if (widthPx < 5) widthPx = 5; // Mínimo visible
+
+            // Color del proyecto
+            const color = p.tipo_color || '#556B2F';
+
+            return {
+                left: `${leftPx}px`,
+                width: `${widthPx}px`,
+                backgroundColor: color
+            };
+        };
 
         // --- UTILIDADES ---        
         
@@ -3679,7 +4011,7 @@
           hasValidEvidence, getChecklistCount, tareasFiltradasLength,isSidebarCollapsed,toggleSidebar,
           reportData, reportTipos, reportProfesionales, showFilters, reportFilters, reportSort, reportProyectosFiltrados,
           reportTotalTareas, reportTareasCompletadas, reportAvancePromedio,
-          loadReportData, toggleFilters, resetReportFilters, 
+          loadReportData, toggleFilters, resetReportFilters, reportViewMode, ganttScale, ganttColumnWidth, ganttTimeline, getGanttBarStyle,
           setSortField, toggleSortOrder, dashTotalTareas, dashTareasCompletadas, dashAvancePromedio,
           getProyectoTotalTareas, getProyectoTareasCompletadas, currentChecklistTask, showChecklistModal
         };
