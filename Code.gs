@@ -575,104 +575,6 @@ function getTaskInfo(taskId) {
 }
 
 /**
- * REGENERA UN PROYECTO COMPLETO (Drive y Tareas)
- * @param {string} projectId ID del proyecto (UUID)
- */
-function regenerateProjectTasks(projectId) {
-  const lock = LockService.getScriptLock();
-  try {
-    // Esperar hasta 30 segundos para obtener el bloqueo
-    lock.waitLock(30000);
-
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheetProyectos = ss.getSheetByName("DB_PROYECTOS");
-    const sheetEjecucion = ss.getSheetByName("DB_EJECUCION");
-    const sheetEtapas = ss.getSheetByName("CONF_ETAPAS");
-    const sheetTareas = ss.getSheetByName("CONF_TAREAS");
-
-    // 1. OBTENER DATOS DEL PROYECTO
-    const proyData = sheetProyectos.getDataRange().getValues();
-    const proyHeaders = proyData.shift();
-    const idxProyId = proyHeaders.indexOf("id");
-    const idxTipoProy = proyHeaders.indexOf("id_tipo_proyecto");
-    const idxDriveId = proyHeaders.indexOf("drive_folder_id");
-    const idxNombre = proyHeaders.indexOf("nombre_obra");
-
-    const proyectoFila = proyData.find(r => r[idxProyId] === projectId);
-    if (!proyectoFila) throw new Error("Proyecto no encontrado.");
-
-    const tipoId = proyectoFila[idxTipoProy];
-    const oldFolderId = proyectoFila[idxDriveId];
-    const nombreObra = proyectoFila[idxNombre];
-
-    // 2. GESTIÓN DE DRIVE (Acción Destructiva)
-    // Borrar carpeta anterior si existe
-    if (oldFolderId) {
-      try {
-        DriveApp.getFolderById(oldFolderId).setTrashed(true);
-      } catch (e) {
-        console.warn("No se pudo borrar la carpeta vieja: " + e.message);
-      }
-    }
-    // Crear nueva carpeta (Obtener raíz de CONF_GENERAL)
-    const newFolder = DriveApp.createFolder(`PROY - ${nombreObra}`);
-    const newDriveUrl = newFolder.getUrl();
-    const newDriveId = newFolder.getId();
-
-    // Actualizar DB_PROYECTOS con nuevo Drive y resetear estado
-    const rowIdx = proyData.findIndex(r => r[idxProyId] === projectId) + 2;
-    sheetProyectos.getRange(rowIdx, idxDriveId + 1).setValue(newDriveId);
-    sheetProyectos.getRange(rowIdx, proyHeaders.indexOf("drive_url") + 1).setValue(newDriveUrl);
-    sheetProyectos.getRange(rowIdx, proyHeaders.indexOf("estado") + 1).setValue("Roadmap");
-
-    // 3. GENERAR NUEVAS TAREAS (Lógica en Memoria)
-    const etapasData = sheetEtapas.getDataRange().getValues();
-    const etapasHeaders = etapasData.shift();
-    const etapasIds = etapasData
-      .filter(r => String(r[etapasHeaders.indexOf("id_tipo_proyecto")]) === String(tipoId))
-      .map(r => r[0]);
-
-    const tareasData = sheetTareas.getDataRange().getValues();
-    const tareasHeaders = tareasData.shift();
-    const tareasTemplate = tareasData.filter(t => etapasIds.includes(t[tareasHeaders.indexOf("etapa_id")]));
-
-    const newRows = tareasTemplate.map(t => [
-      Utilities.getUuid(),
-      projectId,
-      t[tareasHeaders.indexOf("etapa_id")],
-      t[tareasHeaders.indexOf("nombre_tarea")],
-      t[tareasHeaders.indexOf("requiere_evidencia")],
-      t[tareasHeaders.indexOf("tipo_entrada")],
-      t[tareasHeaders.indexOf("checklist_id")],
-      "Pendiente", "", "", "", new Date(), ""
-    ]);
-
-    // 4. TRANSACCIÓN ATÓMICA EN DB_EJECUCION
-    const dataEjec = sheetEjecucion.getDataRange().getValues();
-    const headerEjec = dataEjec.shift();
-    const idxProyEjec = headerEjec.indexOf("proyecto_id");
-
-    // Filtrar lo que NO es de este proyecto
-    const dataCleaned = dataEjec.filter(r => String(r[idxProyEjec]) !== String(projectId));
-    const finalEjecucion = [...dataCleaned, ...newRows];
-
-    // Escribir todo de una sola vez
-    sheetEjecucion.clearContents();
-    if (finalEjecucion.length > 0) {
-      sheetEjecucion.getRange(1, 1, 1, headerEjec.length).setValues([headerEjec]);
-      sheetEjecucion.getRange(2, 1, finalEjecucion.length, finalEjecucion[0].length).setValues(finalEjecucion);
-    }
-
-    return { success: true, folderUrl: newDriveUrl };
-
-  } catch (e) {
-    throw new Error("GAS_ERROR: " + e.message);
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-/**
  * Calcula Estadísticas Globales.
  * Versión segura: Evita errores con nulos en datos_evidencia.
  */
@@ -754,49 +656,8 @@ function getGlobalProgressStats() {
   return result;
 }
 
-/**
- * Acción Destructiva: Cambia el tipo y resetea tareas
- */
-function updateProjectTypeAndReset(projectId, newTypeId) {
-  const lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(30000);
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    
-    // 1. Actualizar el TIPO en DB_PROYECTOS
-    const sheetProy = ss.getSheetByName("DB_PROYECTOS");
-    const data = sheetProy.getDataRange().getValues();
-    const headers = data[0];
-    const idIdx = headers.indexOf("id");
-    const typeIdx = headers.indexOf("id_tipo_proyecto"); 
-    
-    if (idIdx === -1 || typeIdx === -1) throw new Error("Estructura DB_PROYECTOS inválida");
 
-    let foundRow = -1;
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][idIdx]) === String(projectId)) {
-        foundRow = i + 1; // +1 por base 1
-        break;
-      }
-    }
 
-    if (foundRow === -1) throw new Error("Proyecto no encontrado");
-
-    // Actualizamos solo la celda del tipo
-    sheetProy.getRange(foundRow, typeIdx + 1).setValue(newTypeId);
-
-    // 2. Regenerar Tareas (Borra viejas, crea nuevas)
-    regenerateProjectTasks(projectId, newTypeId);
-
-    return { success: true };
-
-  } catch (e) {
-    console.error(e);
-    throw new Error("Error al resetear proyecto: " + e.message);
-  } finally {
-    lock.releaseLock();
-  }
-}
 function addChecklistDataColumn() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName("DB_EJECUCION");
@@ -877,235 +738,6 @@ function getSecureProjects() {
 
   // C. Si no es nada (Invitado), no ve nada
   return [];
-}
-
-/**
- * VERSIÓN COMPLETA Y CORREGIDA
- * Guarda proyecto + Drive + Asignaciones + Tareas
- */
-function saveProjectWithAssignments(projectData, asignadosIds) {
-  const lock = LockService.getScriptLock();
-  
-  try {
-    lock.waitLock(30000);
-    
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    
-    // --- 1. DETECCIÓN DE ESTADO ---
-    const isNew = !projectData.id; 
-    if (isNew) {
-      projectData.id = Utilities.getUuid();
-      projectData.created_at = new Date();
-    }
-
-    // --- 2. CREACIÓN DE ESTRUCTURA EN DRIVE (SOLO SI ES NUEVO) ---
-    if (isNew) {
-      let driveUrl = "";
-      let driveId = "";
-      
-      try {
-        const sheetGeneral = ss.getSheetByName("CONF_GENERAL");
-        const generalData = sheetGeneral.getDataRange().getValues();
-        const rootUrlRow = generalData.find(r => r[0] === "DRIVE_ROOT_FOLDER_URL");
-        
-        if (rootUrlRow && rootUrlRow[1]) {
-          // Extraer ID de la URL raíz
-          const match = rootUrlRow[1].match(/[-\w]{25,}/);
-          const rootFolderId = match ? match[0] : null;
-          
-          if (rootFolderId) {
-            const rootFolder = DriveApp.getFolderById(rootFolderId);
-            const folderName = `${projectData.codigo} - ${projectData.nombre_obra}`;
-            
-            // Crear carpeta principal del proyecto
-            const projectFolder = rootFolder.createFolder(folderName);
-            driveId = projectFolder.getId();
-            driveUrl = projectFolder.getUrl();
-            
-            // Crear subcarpetas de etapas
-            const etapasRaw = readConfig("CONF_ETAPAS");
-            const etapasTipo = etapasRaw
-              .filter(e => e.id_tipo_proyecto === projectData.id_tipo_proyecto)
-              .sort((a, b) => (Number(a.orden) || 999) - (Number(b.orden) || 999));
-            
-            etapasTipo.forEach(e => {
-              if (e.nombre_etapa) {
-                projectFolder.createFolder(`${e.orden}. ${e.nombre_etapa}`);
-              }
-            });
-          }
-        }
-      } catch (driveError) {
-        console.warn("Advertencia: No se pudo crear estructura en Drive.", driveError);
-        driveUrl = "ERROR_DRIVE";
-        driveId = "NO_CREADO";
-      }
-      
-      // Asignar URLs de Drive al objeto
-      projectData.drive_folder_id = driveId;
-      projectData.drive_url = driveUrl;
-    }
-
-    // --- 3. GUARDAR EN DB_PROYECTOS (SIN LOCK ANIDADO) ---
-    const sheetProyectos = ss.getSheetByName("DB_PROYECTOS");
-    if (!sheetProyectos) throw new Error("La hoja DB_PROYECTOS no existe");
-    
-    const dataProyectos = sheetProyectos.getDataRange().getValues();
-    if (dataProyectos.length === 0) throw new Error("DB_PROYECTOS está vacía");
-    
-    const headersProyectos = dataProyectos[0].map(h => h.toString().trim().toLowerCase());
-    
-    if (isNew) {
-      // CREAR NUEVO REGISTRO
-      const newRow = headersProyectos.map(h => {
-        const itemKey = Object.keys(projectData).find(k => k.toLowerCase() === h);
-        return itemKey ? projectData[itemKey] : "";
-      });
-      sheetProyectos.appendRow(newRow);
-      
-    } else {
-      // ACTUALIZAR REGISTRO EXISTENTE
-      const idColIndex = headersProyectos.indexOf("id");
-      if (idColIndex === -1) throw new Error("No se encuentra columna 'id'");
-      
-      let found = false;
-      for (let i = 1; i < dataProyectos.length; i++) {
-        if (dataProyectos[i][idColIndex] === projectData.id) {
-          const rowRange = sheetProyectos.getRange(i + 1, 1, 1, headersProyectos.length);
-          
-          const updatedRow = headersProyectos.map((h, colIdx) => {
-            const itemKey = Object.keys(projectData).find(k => k.toLowerCase() === h);
-            return itemKey !== undefined ? projectData[itemKey] : dataProyectos[i][colIdx];
-          });
-          
-          rowRange.setValues([updatedRow]);
-          found = true;
-          break;
-        }
-      }
-      
-      if (!found) throw new Error("No se encontró el proyecto para actualizar");
-    }
-
-    // --- 4. ACTUALIZAR ASIGNACIONES ---
-    const sheetAsig = ss.getSheetByName("CONF_REL_ASIGNACIONES");
-    if (!sheetAsig) throw new Error("La hoja CONF_REL_ASIGNACIONES no existe");
-    
-    const dataAsig = sheetAsig.getDataRange().getValues();
-    
-    let headersAsig = [];
-    let bodyAsig = [];
-    if (dataAsig.length > 0) {
-      headersAsig = dataAsig.shift(); 
-      bodyAsig = dataAsig;
-    }
-
-    const idxProj = 1; // Columna id_proyecto
-
-    // Eliminar asignaciones viejas de este proyecto
-    let finalData = bodyAsig.filter(row => row[idxProj] !== projectData.id);
-
-    // Agregar nuevas asignaciones
-    const now = new Date();
-    if (asignadosIds && Array.isArray(asignadosIds)) {
-      asignadosIds.forEach(idProf => {
-        finalData.push([
-          Utilities.getUuid(),
-          projectData.id,
-          idProf,
-          now
-        ]);
-      });
-    }
-
-    // Reescribir tabla de asignaciones
-    if (finalData.length > 0 && headersAsig.length > 0) {
-      if (sheetAsig.getLastRow() > 1) {
-         sheetAsig.getRange(2, 1, sheetAsig.getLastRow() - 1, headersAsig.length).clearContent();
-      }
-      sheetAsig.getRange(2, 1, finalData.length, headersAsig.length).setValues(finalData);
-    }
-
-    // --- 5. GENERACIÓN DE TAREAS SI ES NUEVO ---
-    if (isNew && projectData.id_tipo_proyecto) {
-      regenerateProjectTasksInternal(ss, projectData.id, projectData.id_tipo_proyecto);
-    }
-    
-    SpreadsheetApp.flush(); // Forzar escritura
-    
-    return { success: true, projectId: projectData.id };
-
-  } catch (e) {
-    console.error("Error saveProjectWithAssignments:", e);
-    throw new Error("Error al guardar proyecto: " + e.message);
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-/**
- * Versión interna de regenerateProjectTasks (sin lock propio)
- */
-function regenerateProjectTasksInternal(ss, projectId, tipoId) {
-  const sheetEjecucion = ss.getSheetByName("DB_EJECUCION");
-  const sheetEtapas = ss.getSheetByName("CONF_ETAPAS");
-  const sheetTareas = ss.getSheetByName("CONF_TAREAS");
-
-  const etapasData = sheetEtapas.getDataRange().getValues();
-  const etapasHeaders = etapasData.shift();
-  const idxTipoEnEtapa = etapasHeaders.indexOf("id_tipo_proyecto");
-  const idxIdEtapa = 0;
-
-  if (idxTipoEnEtapa === -1) throw new Error("No hay id_tipo_proyecto en CONF_ETAPAS");
-
-  const etapasIds = etapasData
-    .filter(r => String(r[idxTipoEnEtapa]) === String(tipoId))
-    .map(r => r[idxIdEtapa]);
-
-  if (etapasIds.length === 0) {
-    console.warn("No hay etapas configuradas para el tipo: " + tipoId);
-    return;
-  }
-
-  const tareasData = sheetTareas.getDataRange().getValues();
-  const tareasHeaders = tareasData.shift();
-  const idxEtapaEnTarea = tareasHeaders.indexOf("etapa_id"); 
-  
-  const tareasTemplate = tareasData.filter(r => etapasIds.includes(r[idxEtapaEnTarea]));
-
-  const tIdxName = tareasHeaders.indexOf("nombre_tarea");
-  const tIdxEvidencia = tareasHeaders.indexOf("requiere_evidencia");
-  const tIdxInput = tareasHeaders.indexOf("tipo_entrada");
-  const tIdxChecklist = tareasHeaders.indexOf("checklist_id");
-
-  const newRows = tareasTemplate.map(t => [
-    Utilities.getUuid(),
-    projectId,
-    t[idxEtapaEnTarea],
-    t[tIdxName],
-    t[tIdxEvidencia],
-    t[tIdxInput],
-    t[tIdxChecklist],
-    "Pendiente",
-    "",
-    "",
-    "",
-    new Date(),
-    ""
-  ]);
-
-  const dataEjec = sheetEjecucion.getDataRange().getValues();
-  const headerEjec = dataEjec.shift();
-  const idxProyEjec = headerEjec.indexOf("proyecto_id");
-
-  const dataCleaned = dataEjec.filter(r => String(r[idxProyEjec]) !== String(projectId));
-  const finalEjecucion = [...dataCleaned, ...newRows];
-
-  sheetEjecucion.clearContents();
-  sheetEjecucion.appendRow(headerEjec);
-  if (finalEjecucion.length > 0) {
-    sheetEjecucion.getRange(2, 1, finalEjecucion.length, finalEjecucion[0].length).setValues(finalEjecucion);
-  }
 }
 
 /**
@@ -1614,6 +1246,426 @@ function getLogoBase64() {
   
 }
 
+/**
+ * FUNCIÓN MAESTRA: Gestión completa de carpetas Drive
+ * Crea carpeta principal + subcarpetas de etapas según el tipo de proyecto
+ * @returns {Object} {folderId, folderUrl}
+ */
+function createProjectDriveStructure(projectCode, projectName, tipoId) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // 1. Obtener carpeta raíz de CONF_GENERAL
+    const sheetGeneral = ss.getSheetByName("CONF_GENERAL");
+    const generalData = sheetGeneral.getDataRange().getValues();
+    const rootUrlRow = generalData.find(r => r[0] === "DRIVE_ROOT_FOLDER_URL");
+    
+    if (!rootUrlRow || !rootUrlRow[1]) {
+      throw new Error("URL raíz de Drive no configurada");
+    }
+    
+    // 2. Extraer ID de la URL
+    const match = rootUrlRow[1].match(/[-\w]{25,}/);
+    const rootFolderId = match ? match[0] : null;
+    if (!rootFolderId) throw new Error("ID de carpeta raíz inválido");
+    
+    const rootFolder = DriveApp.getFolderById(rootFolderId);
+    
+    // 3. Crear carpeta principal del proyecto
+    const folderName = `${projectCode} - ${projectName}`;
+    const projectFolder = rootFolder.createFolder(folderName);
+    
+    // 4. Crear subcarpetas de etapas (CRÍTICO PARA CONSISTENCIA)
+    const etapasRaw = readConfig("CONF_ETAPAS");
+    const etapasTipo = etapasRaw
+      .filter(e => e.id_tipo_proyecto === tipoId)
+      .sort((a, b) => (Number(a.orden) || 999) - (Number(b.orden) || 999));
+    
+    etapasTipo.forEach(e => {
+      if (e.nombre_etapa) {
+        projectFolder.createFolder(`${e.orden}. ${e.nombre_etapa}`);
+      }
+    });
+    
+    return {
+      folderId: projectFolder.getId(),
+      folderUrl: projectFolder.getUrl()
+    };
+    
+  } catch (e) {
+    console.error("Error en createProjectDriveStructure:", e);
+    throw new Error("Error creando estructura Drive: " + e.message);
+  }
+}
+
+/**
+ * FUNCIÓN MAESTRA: Generación de tareas en DB_EJECUCION
+ * Borra tareas viejas del proyecto + crea nuevas según el tipo
+ */
+function regenerateProjectTasksInDB(ss, projectId, tipoId) {
+  const sheetEjecucion = ss.getSheetByName("DB_EJECUCION");
+  const sheetEtapas = ss.getSheetByName("CONF_ETAPAS");
+  const sheetTareas = ss.getSheetByName("CONF_TAREAS");
+
+  // 1. Obtener etapas del tipo
+  const etapasData = sheetEtapas.getDataRange().getValues();
+  const etapasHeaders = etapasData.shift();
+  const idxTipoEnEtapa = etapasHeaders.indexOf("id_tipo_proyecto");
+  const idxIdEtapa = 0;
+
+  if (idxTipoEnEtapa === -1) {
+    throw new Error("Columna id_tipo_proyecto no encontrada en CONF_ETAPAS");
+  }
+
+  const etapasIds = etapasData
+    .filter(r => String(r[idxTipoEnEtapa]) === String(tipoId))
+    .map(r => r[idxIdEtapa]);
+
+  if (etapasIds.length === 0) {
+    console.warn("⚠️ No hay etapas configuradas para el tipo: " + tipoId);
+    return;
+  }
+
+  // 2. Obtener template de tareas
+  const tareasData = sheetTareas.getDataRange().getValues();
+  const tareasHeaders = tareasData.shift();
+  const idxEtapaEnTarea = tareasHeaders.indexOf("etapa_id");
+  const tIdxName = tareasHeaders.indexOf("nombre_tarea");
+  const tIdxEvidencia = tareasHeaders.indexOf("requiere_evidencia");
+  const tIdxInput = tareasHeaders.indexOf("tipo_entrada");
+  const tIdxChecklist = tareasHeaders.indexOf("checklist_id");
+
+  const tareasTemplate = tareasData.filter(r => etapasIds.includes(r[idxEtapaEnTarea]));
+
+  // 3. Crear filas nuevas
+  const newRows = tareasTemplate.map(t => [
+    Utilities.getUuid(),           // id
+    projectId,                      // proyecto_id
+    t[idxEtapaEnTarea],            // etapa_id
+    t[tIdxName],                   // nombre_tarea
+    t[tIdxEvidencia],              // requiere_evidencia
+    t[tIdxInput] || 'text',        // tipo_entrada
+    t[tIdxChecklist] || '',        // checklist_id
+    "Pendiente",                   // estado
+    "",                            // comentarios
+    "",                            // datos_checklist
+    "",                            // datos_evidencia
+    new Date(),                    // created_at
+    ""                             // updated_at
+  ]);
+
+  // 4. TRANSACCIÓN ATÓMICA: Borrar viejas + Escribir nuevas
+  const dataEjec = sheetEjecucion.getDataRange().getValues();
+  const headerEjec = dataEjec.shift();
+  const idxProyEjec = headerEjec.indexOf("proyecto_id");
+
+  // Filtrar todo EXCEPTO las tareas de este proyecto
+  const dataCleaned = dataEjec.filter(r => String(r[idxProyEjec]) !== String(projectId));
+  
+  // Combinar con las nuevas
+  const finalEjecucion = [...dataCleaned, ...newRows];
+
+  // Escribir todo de una vez (operación atómica)
+  sheetEjecucion.clearContents();
+  if (finalEjecucion.length > 0) {
+    sheetEjecucion.getRange(1, 1, 1, headerEjec.length).setValues([headerEjec]);
+    sheetEjecucion.getRange(2, 1, finalEjecucion.length, finalEjecucion[0].length)
+      .setValues(finalEjecucion);
+  } else {
+    sheetEjecucion.getRange(1, 1, 1, headerEjec.length).setValues([headerEjec]);
+  }
+}
+
+/**
+ * GUARDAR PROYECTO + ASIGNACIONES + DRIVE + TAREAS
+ * Versión Refactorizada - Usa funciones maestras
+ */
+function saveProjectWithAssignments(projectData, asignadosIds) {
+  const lock = LockService.getScriptLock();
+  
+  try {
+    lock.waitLock(30000);
+    
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // --- 1. DETECCIÓN DE ESTADO ---
+    const isNew = !projectData.id; 
+    if (isNew) {
+      projectData.id = Utilities.getUuid();
+      projectData.created_at = new Date();
+    }
+
+    // --- 2. CREACIÓN DE ESTRUCTURA EN DRIVE (SOLO SI ES NUEVO) ---
+    if (isNew) {
+      try {
+        const driveResult = createProjectDriveStructure(
+          projectData.codigo, 
+          projectData.nombre_obra, 
+          projectData.id_tipo_proyecto
+        );
+        
+        projectData.drive_folder_id = driveResult.folderId;
+        projectData.drive_url = driveResult.folderUrl;
+        
+      } catch (driveError) {
+        console.warn("⚠️ No se pudo crear estructura Drive:", driveError);
+        projectData.drive_folder_id = "ERROR_DRIVE";
+        projectData.drive_url = "NO_CREADO";
+      }
+    }
+
+    // --- 3. GUARDAR EN DB_PROYECTOS ---
+    const sheetProyectos = ss.getSheetByName("DB_PROYECTOS");
+    if (!sheetProyectos) throw new Error("La hoja DB_PROYECTOS no existe");
+    
+    const dataProyectos = sheetProyectos.getDataRange().getValues();
+    if (dataProyectos.length === 0) throw new Error("DB_PROYECTOS está vacía");
+    
+    const headersProyectos = dataProyectos[0].map(h => h.toString().trim().toLowerCase());
+    
+    if (isNew) {
+      // CREAR NUEVO REGISTRO
+      const newRow = headersProyectos.map(h => {
+        const itemKey = Object.keys(projectData).find(k => k.toLowerCase() === h);
+        return itemKey ? projectData[itemKey] : "";
+      });
+      sheetProyectos.appendRow(newRow);
+      
+    } else {
+      // ACTUALIZAR REGISTRO EXISTENTE
+      const idColIndex = headersProyectos.indexOf("id");
+      if (idColIndex === -1) throw new Error("No se encuentra columna 'id'");
+      
+      let found = false;
+      for (let i = 1; i < dataProyectos.length; i++) {
+        if (dataProyectos[i][idColIndex] === projectData.id) {
+          const rowRange = sheetProyectos.getRange(i + 1, 1, 1, headersProyectos.length);
+          
+          const updatedRow = headersProyectos.map((h, colIdx) => {
+            const itemKey = Object.keys(projectData).find(k => k.toLowerCase() === h);
+            return itemKey !== undefined ? projectData[itemKey] : dataProyectos[i][colIdx];
+          });
+          
+          rowRange.setValues([updatedRow]);
+          found = true;
+          break;
+        }
+      }
+      
+      if (!found) throw new Error("No se encontró el proyecto para actualizar");
+    }
+
+    // --- 4. ACTUALIZAR ASIGNACIONES ---
+    const sheetAsig = ss.getSheetByName("CONF_REL_ASIGNACIONES");
+    if (!sheetAsig) throw new Error("La hoja CONF_REL_ASIGNACIONES no existe");
+    
+    const dataAsig = sheetAsig.getDataRange().getValues();
+    
+    let headersAsig = [];
+    let bodyAsig = [];
+    if (dataAsig.length > 0) {
+      headersAsig = dataAsig.shift(); 
+      bodyAsig = dataAsig;
+    }
+
+    const idxProj = 1; // Columna id_proyecto
+
+    // Eliminar asignaciones viejas de este proyecto
+    let finalData = bodyAsig.filter(row => row[idxProj] !== projectData.id);
+
+    // Agregar nuevas asignaciones
+    const now = new Date();
+    if (asignadosIds && Array.isArray(asignadosIds)) {
+      asignadosIds.forEach(idProf => {
+        finalData.push([
+          Utilities.getUuid(),
+          projectData.id,
+          idProf,
+          now
+        ]);
+      });
+    }
+
+    // Reescribir tabla de asignaciones
+    if (finalData.length > 0 && headersAsig.length > 0) {
+      if (sheetAsig.getLastRow() > 1) {
+         sheetAsig.getRange(2, 1, sheetAsig.getLastRow() - 1, headersAsig.length).clearContent();
+      }
+      sheetAsig.getRange(2, 1, finalData.length, headersAsig.length).setValues(finalData);
+    }
+
+    // --- 5. GENERACIÓN DE TAREAS SI ES NUEVO (Usando función maestra) ---
+    if (isNew && projectData.id_tipo_proyecto) {
+      regenerateProjectTasksInDB(ss, projectData.id, projectData.id_tipo_proyecto);
+    }
+    
+    SpreadsheetApp.flush(); // Forzar escritura
+    
+    return { success: true, projectId: projectData.id };
+
+  } catch (e) {
+    console.error("❌ Error en saveProjectWithAssignments:", e);
+    throw new Error("Error al guardar proyecto: " + e.message);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Versión interna de regenerate Project Tasks (sin lock propio)
+ * Ahora simplemente delega a la función maestra
+ * @param {SpreadsheetApp.Spreadsheet} ss - Instancia del spreadsheet
+ * @param {string} projectId - UUID del proyecto
+ * @param {string} tipoId - UUID del tipo de proyecto
+ */
+function regenerateProjectTasksInternal(ss, projectId, tipoId) {
+  // Delegamos toda la lógica a la función maestra
+  regenerateProjectTasksInDB(ss, projectId, tipoId);
+}
 
 
+/**
+ * REGENERACIÓN COMPLETA DE PROYECTO (Drive + Tareas)
+ * Versión Refactorizada - Usa funciones maestras
+ * 
+ * Acción Destructiva:
+ * - Borra carpeta Drive anterior
+ * - Crea nueva estructura Drive con subcarpetas
+ * - Borra todas las tareas del proyecto
+ * - Genera nuevas tareas según el tipo actual
+ * 
+ * @param {string} projectId - UUID del proyecto
+ * @returns {Object} {success, folderUrl}
+ */
+function regenerateProjectTasks(projectId) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
 
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheetProyectos = ss.getSheetByName("DB_PROYECTOS");
+
+    // --- 1. OBTENER DATOS DEL PROYECTO ---
+    const proyData = sheetProyectos.getDataRange().getValues();
+    const proyHeaders = proyData.shift();
+    
+    // Buscar índices de columnas
+    const idxProyId = proyHeaders.indexOf("id");
+    const idxTipoProy = proyHeaders.indexOf("id_tipo_proyecto");
+    const idxDriveId = proyHeaders.indexOf("drive_folder_id");
+    const idxDriveUrl = proyHeaders.indexOf("drive_url");
+    const idxCodigo = proyHeaders.indexOf("codigo");
+    const idxNombre = proyHeaders.indexOf("nombre_obra");
+
+    // Buscar fila del proyecto
+    const proyectoFila = proyData.find(r => r[idxProyId] === projectId);
+    if (!proyectoFila) {
+      throw new Error("Proyecto no encontrado");
+    }
+
+    const tipoId = proyectoFila[idxTipoProy];
+    const oldFolderId = proyectoFila[idxDriveId];
+    const codigo = proyectoFila[idxCodigo];
+    const nombreObra = proyectoFila[idxNombre];
+
+    // --- 2. BORRAR CARPETA DRIVE ANTERIOR ---
+    if (oldFolderId && oldFolderId !== "NO_CREADO" && oldFolderId !== "ERROR_DRIVE") {
+      try {
+        DriveApp.getFolderById(oldFolderId).setTrashed(true);
+        console.log("✅ Carpeta Drive anterior enviada a la papelera");
+      } catch (e) {
+        console.warn("⚠️ No se pudo borrar carpeta vieja:", e.message);
+      }
+    }
+
+    // --- 3. CREAR NUEVA ESTRUCTURA DRIVE (Usando función maestra) ---
+    const driveResult = createProjectDriveStructure(codigo, nombreObra, tipoId);
+    console.log("✅ Nueva estructura Drive creada:", driveResult.folderUrl);
+
+    // --- 4. ACTUALIZAR DB_PROYECTOS CON NUEVO DRIVE ---
+    const rowIdx = proyData.findIndex(r => r[idxProyId] === projectId) + 2;
+    sheetProyectos.getRange(rowIdx, idxDriveId + 1).setValue(driveResult.folderId);
+    sheetProyectos.getRange(rowIdx, idxDriveUrl + 1).setValue(driveResult.folderUrl);
+    console.log("✅ DB_PROYECTOS actualizado con nuevo Drive");
+
+    // --- 5. REGENERAR TAREAS (Usando función maestra) ---
+    regenerateProjectTasksInDB(ss, projectId, tipoId);
+    console.log("✅ Tareas regeneradas en DB_EJECUCION");
+
+    SpreadsheetApp.flush(); // Forzar escritura
+
+    return { 
+      success: true, 
+      folderUrl: driveResult.folderUrl 
+    };
+
+  } catch (e) {
+    console.error("❌ Error en regenerate Project Tasks:", e);
+    throw new Error("Error regenerando proyecto: " + e.message);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Acción Destructiva: Cambia el tipo de proyecto y resetea tareas
+ * Versión Refactorizada - Usa regenerateProjectTasks maestra
+ * 
+ * @param {string} projectId - UUID del proyecto
+ * @param {string} newTypeId - Nuevo UUID del tipo de proyecto
+ * @returns {Object} {success: boolean}
+ */
+function updateProjectTypeAndReset(projectId, newTypeId) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // --- 1. ACTUALIZAR EL TIPO EN DB_PROYECTOS ---
+    const sheetProy = ss.getSheetByName("DB_PROYECTOS");
+    const data = sheetProy.getDataRange().getValues();
+    const headers = data[0];
+    const idIdx = headers.indexOf("id");
+    const typeIdx = headers.indexOf("id_tipo_proyecto");
+    
+    if (idIdx === -1 || typeIdx === -1) {
+      throw new Error("Estructura DB_PROYECTOS inválida");
+    }
+
+    let foundRow = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][idIdx]) === String(projectId)) {
+        foundRow = i + 1; // +1 porque getRange es base 1
+        break;
+      }
+    }
+
+    if (foundRow === -1) {
+      throw new Error("Proyecto no encontrado");
+    }
+
+    // Actualizar la celda del tipo
+    sheetProy.getRange(foundRow, typeIdx + 1).setValue(newTypeId);
+    console.log("✅ Tipo de proyecto actualizado en DB_PROYECTOS");
+
+    // --- 2. LIBERAR LOCK ANTES DE LLAMAR A FUNCIÓN CON LOCK PROPIO ---
+    lock.releaseLock();
+    
+    // --- 3. REGENERAR TODO (Drive + Tareas) USANDO FUNCIÓN MAESTRA ---
+    // Esta función tiene su propio lock, por eso liberamos el nuestro antes
+    regenerateProjectTasks(projectId);
+
+    return { success: true };
+
+  } catch (e) {
+    console.error("❌ Error en updateProjectTypeAndReset:", e);
+    throw new Error("Error al resetear proyecto: " + e.message);
+  } finally {
+    // Intentar liberar lock solo si aún está activo
+    try { 
+      lock.releaseLock(); 
+    } catch (e) {
+      // Lock ya fue liberado, ignorar error
+    }
+  }
+}
