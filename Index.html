@@ -577,6 +577,89 @@
   z-index: 2;
 }
 
+/* ==========================================================================
+   SISTEMA DE INDICADORES DE PRIORIDAD
+   ========================================================================== */
+
+.priority-indicator {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
+  cursor: help;
+}
+
+.priority-indicator:hover {
+  transform: scale(1.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.priority-value {
+  font-size: 0.75rem;
+  font-weight: 900;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  letter-spacing: -0.5px;
+}
+
+/* Efecto de pulso para prioridades críticas (9-10) */
+@keyframes priority-pulse {
+  0%, 100% {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  }
+  50% {
+    box-shadow: 0 4px 12px rgba(255, 0, 0, 0.4), 0 0 15px rgba(255, 0, 0, 0.3);
+  }
+}
+
+/* Aplicar animación solo a prioridades críticas en las tarjetas */
+.project-card .priority-indicator[style*="#B22222"],
+.project-card .priority-indicator[style*="#FF0000"] {
+  animation: priority-pulse 2s ease-in-out infinite;
+}
+
+/* Ajustes para indicador en Gantt */
+.gantt-sidebar-item .priority-indicator {
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px;
+  flex-shrink: 0;
+}
+
+.gantt-sidebar-item .priority-value {
+  font-size: 0.65rem !important;
+}
+
+/* Desactivar animación en Gantt para no sobrecargar */
+.gantt-sidebar-item .priority-indicator {
+  animation: none !important;
+}
+
+/* Filtro de Prioridad en Reportes */
+.form-control.is-valid {
+  border-color: #28a745;
+  padding-right: calc(1.5em + 0.75rem);
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%2328a745' d='M2.3 6.73L.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1z'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right calc(0.375em + 0.1875rem) center;
+  background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+.form-control.is-invalid {
+  border-color: #dc3545;
+  padding-right: calc(1.5em + 0.75rem);
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right calc(0.375em + 0.1875rem) center;
+  background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
   </style>
 </head>
 
@@ -1155,24 +1238,44 @@
               <div class="card border-0 shadow-sm h-100 hover-card project-card position-relative overflow-hidden"
                   :style="{ borderTop: '4px solid ' + getProjectTypeInfo(p.id_tipo_proyecto).color }">
                 
-                <div class="card-body d-flex flex-column pt-3">
+                <div class="card-body d-flex flex-column pt-3"> 
                   
                   <div class="d-flex justify-content-between align-items-center mb-2">
                   
-                    <div class="d-flex align-items-center gap-1">
-                        
-                        <span class="badge border fw-normal text-white shadow-sm d-flex align-items-center" 
-                              :style="{ backgroundColor: getProjectTypeInfo(p.id_tipo_proyecto).color }"
-                              style="font-size: 0.65rem; letter-spacing: 0.5px;">
-                          {{ getProjectTypeInfo(p.id_tipo_proyecto).nombre }}
-                        </span>
+                  <div class="d-flex align-items-center gap-1">
+                      
+                      <span class="badge border fw-normal text-white shadow-sm d-flex align-items-center" 
+                            :style="{ backgroundColor: getProjectTypeInfo(p.id_tipo_proyecto).color }"
+                            style="font-size: 0.65rem; letter-spacing: 0.5px;">
+                        {{ getProjectTypeInfo(p.id_tipo_proyecto).nombre }}
+                      </span>
 
-                        <span class="badge bg-light text-secondary border fw-normal text-uppercase" 
-                              style="letter-spacing: 0.5px; font-size: 0.65rem;">
-                          <i class="bi bi-hash"></i> {{ p.codigo }}
-                        </span>
-                        
-                    </div>
+                      <span class="badge bg-light text-secondary border fw-normal text-uppercase" 
+                            style="letter-spacing: 0.5px; font-size: 0.65rem;">
+                        <i class="bi bi-hash"></i> {{ p.codigo }}
+                      </span>
+
+                      <div v-if="getProjectPriority(p).hasIndicator" 
+                          class="priority-indicator"
+                          :style="{ 
+                            backgroundColor: getProjectPriority(p).color,
+                            borderColor: getProjectPriority(p).color
+                          }"
+                          :title="'Prioridad: ' + getProjectPriority(p).value + '/10 - ' + getProjectPriority(p).label">
+                        <span class="priority-value">{{ getProjectPriority(p).value }}</span>
+                      </div>
+
+                      <div v-if="getProjectPriority(p).hasIndicator" 
+                          class="badge border-0 text-white shadow-sm"
+                          :style="{ 
+                            backgroundColor: getProjectPriority(p).color + 'dd',
+                            fontSize: '0.6rem',
+                            padding: '2px 6px'
+                          }">
+                        {{ getProjectPriority(p).label }}
+                      </div>
+                      
+                  </div>
                     
                     <span class="badge rounded-pill border px-3 py-1"
                           :style="{ 
@@ -1584,18 +1687,88 @@
                   </div>
                 </div>
 
+                <!-- ✅ NUEVO: Filtro por Rangos de Prioridad -->
+                <div class="col-md-2">
+                  <label class="form-label small fw-bold text-muted">
+                    <i class="bi bi-funnel-fill me-1"></i>Prioridad
+                  </label>
+                  
+                  <input 
+                    type="text" 
+                    v-model="reportFilters.prioridadRangos" 
+                    class="form-control form-control-sm"
+                    placeholder="ej: 1, 3, 5-7, 10"
+                    :class="{
+                      'is-valid': reportFilters.prioridadRangos && validatePriorityRangeInput(reportFilters.prioridadRangos).valid,
+                      'is-invalid': reportFilters.prioridadRangos && !validatePriorityRangeInput(reportFilters.prioridadRangos).valid
+                    }">
+
+                    <!-- Después del input de prioridad -->
+                    <div class="mt-2 d-flex flex-wrap gap-1 justify-content-center align-items-center">
+                      <button 
+                        class="btn btn-outline-secondary btn-sm rounded-pill"
+                        style="font-size: 0.65rem; padding: 2px 8px;"
+                        @click="reportFilters.prioridadRangos = '9-10'">
+                        🔴 Críticas
+                      </button>
+                      <button 
+                        class="btn btn-outline-secondary btn-sm rounded-pill"
+                        style="font-size: 0.65rem; padding: 2px 8px;"
+                        @click="reportFilters.prioridadRangos = '6-8'">
+                        🟡 Altas
+                      </button>
+                      <button 
+                        class="btn btn-outline-secondary btn-sm rounded-pill"
+                        style="font-size: 0.65rem; padding: 2px 8px;"
+                        @click="reportFilters.prioridadRangos = '3-5'">
+                        🟢 Medias
+                      </button>
+                      <button 
+                        class="btn btn-outline-secondary btn-sm rounded-pill"
+                        style="font-size: 0.65rem; padding: 2px 8px;"
+                        @click="reportFilters.prioridadRangos = '1-2'">
+                        ⚪ Bajas
+                      </button>
+                    </div>
+                  
+                  <!-- Feedback visual -->
+                  <div v-if="reportFilters.prioridadRangos" class="mt-1">
+                    <small 
+                      :class="validatePriorityRangeInput(reportFilters.prioridadRangos).valid ? 'text-success' : 'text-danger'">
+                      {{ validatePriorityRangeInput(reportFilters.prioridadRangos).message }}
+                    </small>
+                  </div>
+                  
+                  <!-- Ejemplos de uso -->
+                  <div class="mt-2 p-2 bg-light rounded border" style="font-size: 0.65rem;">
+                    <div class="fw-bold text-muted mb-1">Ejemplos de uso:</div>
+                      <div class="text-muted">
+                        • <code>1, 3, 8-10</code> → Múltiples niveles <br>
+                        • <code>5-7</code> → Rango medio
+                      </div>
+                  </div>
+                </div>
+
                 <!-- Filtro por % de Avance -->
-                <div class="col-md-3">
+                <div class="col-md-2">
                   <label class="form-label small fw-bold text-muted">% de Avance</label>
-                  <div class="input-group input-group-sm mb-1">
-                    <select v-model="reportFilters.avanceOperador" class="form-select">
+                  
+                  <div class="d-flex flex-column gap-1"> 
+                    
+                    <!-- Selector arriba -->
+                    <select v-model="reportFilters.avanceOperador" class="form-select form-select-sm">
                       <option value="=">=</option>
                       <option value=">">></option>
                       <option value="<"><</option>
                     </select>
-                    <input type="number" v-model.number="reportFilters.avanceValor" 
-                          class="form-control" min="0" max="100" step="5" placeholder="0-100">
-                    <span class="input-group-text">%</span>
+
+                    <!-- Grupo para el número y el símbolo % abajo -->
+                    <div class="input-group input-group-sm">
+                      <input type="number" v-model.number="reportFilters.avanceValor" 
+                            class="form-control" min="0" max="100" step="5" placeholder="0-100">
+                      <span class="input-group-text">%</span>
+                    </div>
+
                   </div>
                 </div>
 
@@ -1760,6 +1933,18 @@
                   :data-bs-target="'#proyecto_'+index" :aria-controls="'proyecto_'+index">
                   <div class="d-flex align-items-center w-100 pe-3">
 
+                     <!-- ✅ NUEVO: Indicador de Prioridad -->
+                    <div v-if="getProjectPriority(proyecto).hasIndicator" class="me-2">
+                      <div class="priority-indicator"
+                          :style="{ 
+                            backgroundColor: getProjectPriority(proyecto).color,
+                            borderColor: getProjectPriority(proyecto).color
+                          }"
+                          :title="'Prioridad: ' + getProjectPriority(proyecto).value + '/10 - ' + getProjectPriority(proyecto).label">
+                        <span class="priority-value">{{ getProjectPriority(proyecto).value }}</span>
+                      </div>
+                    </div>
+
                     <!-- Indicador de tipo -->
                     <div class="me-3">
                       <span class="badge" :style="{backgroundColor: proyecto.tipo_color}">
@@ -1770,6 +1955,19 @@
                     <!-- Info principal -->
                     <div class="flex-grow-1">
                       <div class="d-flex align-items-center mb-1">
+      
+                          <!-- ✅ NUEVO: Badge de Prioridad (opcional, solo si quieres texto también) -->
+                          <div v-if="getProjectPriority(proyecto).hasIndicator" class="me-2">
+                            <span class="badge border-0 text-white shadow-sm"
+                                  :style="{ 
+                                    backgroundColor: getProjectPriority(proyecto).color + 'dd',
+                                    fontSize: '0.6rem',
+                                    padding: '2px 6px'
+                                  }">
+                              {{ getProjectPriority(proyecto).label }}
+                            </span>
+                          </div>
+
                         <strong class="me-2">{{ proyecto.nombre }}</strong>
                         <span class="badge bg-light text-dark border small">{{ proyecto.codigo }}</span>
                       </div>
@@ -1965,9 +2163,26 @@
               <div v-for="p in reportProyectosFiltrados" :key="p.id" class="gantt-row">
 
                 <div class="gantt-sidebar-item">
-                  <div class="text-truncate w-100" :title="p.nombre">
-                    <div class="fw-bold text-dark small">{{ p.nombre }}</div>
-                    <div class="text-muted" style="font-size: 0.65rem;">{{ p.etapa_actual }}</div>
+                  <div class="d-flex align-items-center w-100">
+                    
+                    <!-- ✅ NUEVO: Indicador de Prioridad en Gantt -->
+                    <div v-if="getProjectPriority(p).hasIndicator" 
+                        class="priority-indicator me-2"
+                        :style="{ 
+                          backgroundColor: getProjectPriority(p).color,
+                          borderColor: getProjectPriority(p).color,
+                          width: '24px',
+                          height: '24px',
+                          fontSize: '0.65rem'
+                        }"
+                        :title="'Prioridad: ' + getProjectPriority(p).value + '/10'">
+                      <span class="priority-value">{{ getProjectPriority(p).value }}</span>
+                    </div>
+                    
+                    <div class="text-truncate flex-grow-1" :title="p.nombre">
+                      <div class="fw-bold text-dark small">{{ p.nombre }}</div>
+                      <div class="text-muted" style="font-size: 0.65rem;">{{ p.etapa_actual }}</div>
+                    </div>
                   </div>
                 </div>
 
@@ -2116,20 +2331,24 @@
               <h5 class="modal-title fs-6"><i class="bi bi-list-task me-2"></i>Configurar Protocolo</h5>
               <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body bg-light" v-if="currentChecklistTask">
+            <div class="modal-body bg-light">
               <div class="bg-white p-3 rounded shadow-sm mb-3">
                 <label class="form-label small fw-bold text-muted">Título del Protocolo</label>
                 <input type="text" v-model="form.nombre_checklist" class="form-control"
                   placeholder="Ej: Inspección de Cimentación">
               </div>
+              
               <div class="d-flex justify-content-between align-items-center mb-2 px-1">
-                <small class="text-muted fw-bold text-uppercase" style="font-size: 0.7rem;">Ítems de Verificación
-                  (Arrastra para ordenar)</small>
+                <small class="text-muted fw-bold text-uppercase" style="font-size: 0.7rem;">
+                  Ítems de Verificación ({{ form.items ? form.items.length : 0 }} items)
+                </small>
                 <button class="btn btn-sm btn-outline-expert rounded-pill" @click="addChecklistItem">
                   <i class="bi bi-plus-lg"></i> Agregar Ítem
                 </button>
               </div>
+              
               <div id="sortable-items" class="d-flex flex-column gap-2 pb-3">
+                <!-- CRÍTICO: Verificar que el v-for esté correctamente vinculado -->
                 <div v-for="(item, idx) in form.items" :key="idx" class="card border-0 shadow-sm item-drag">
                   <div class="card-body p-2 d-flex align-items-center bg-white rounded">
                     <div class="me-3 text-muted cursor-move handle px-2" style="cursor: grab;">
@@ -2153,13 +2372,16 @@
                     </button>
                   </div>
                 </div>
-                <div v-if="!form.items || (Array.isArray(form.items) && form.items.length === 0)"
-                  class="text-center py-4 border dashed rounded text-muted">
+                
+                <!-- Mensaje cuando no hay items -->
+                <div v-if="!form.items || form.items.length === 0"
+                  class="text-center py-4 border border-dashed rounded text-muted bg-white">
                   <i class="bi bi-arrow-up-circle fs-4"></i>
-                  <p class="small mb-0">Agrega ítems para construir el protocolo.</p>
+                  <p class="small mb-0 mt-2">Agrega ítems para construir el protocolo.</p>
                 </div>
               </div>
             </div>
+            
             <div class="modal-footer border-0 bg-white">
               <button class="btn btn-expert w-100 rounded-pill shadow-sm" @click="saveChecklist">
                 <i class="bi bi-save me-2"></i> Guardar Protocolo
@@ -2493,7 +2715,8 @@
           fechaFinDesde: '',
           fechaFinHasta: '',
           avanceOperador: '=',
-          avanceValor: null
+          avanceValor: null,
+          prioridadRangos: ''
         });
 
         const reportSort = ref({
@@ -2563,6 +2786,10 @@
                     tipo_color: infoTipo.color,
 
                     cliente: p.cliente || '',
+
+                    // ✅ NUEVO: Extraer prioridad para PDF
+                    prioridad: extractPriorityValue(p.cliente),
+                    prioridad_color: getPriorityColorForValue(extractPriorityValue(p.cliente)),
                     
                     // Plazo formateado
                     plazo: plazoStr,
@@ -2575,44 +2802,6 @@
                     avance: Number(p.progreso_global) || 0
                 };
             });
-
-            // Helper blindado para leer JSON desde CSV
-            const parseJson = (str) => {
-                // 1. Si es nulo o indefinido
-                if (!str) return [];
-                
-                // 2. Si ya es un objeto, devolverlo
-                if (typeof str === 'object') return str;
-
-                try {
-                    // Intento A: Parseo directo (el escenario ideal)
-                    const parsed = JSON.parse(str);
-                    
-                    // Si el resultado sigue siendo un string (doble encoding), parseamos de nuevo
-                    if (typeof parsed === 'string') {
-                        return JSON.parse(parsed);
-                    }
-                    return parsed;
-                } catch (e) {
-                    // Intento B: Limpieza de formato CSV ("" -> ")
-                    try {
-                        let clean = str.trim();
-                        
-                        // Si empieza y termina con comillas, las quitamos
-                        if (clean.startsWith('"') && clean.endsWith('"')) {
-                            clean = clean.substring(1, clean.length - 1);
-                        }
-                        
-                        // Reemplazamos las dobles comillas de CSV ("") por una simple (")
-                        clean = clean.replace(/""/g, '"');
-                        
-                        return JSON.parse(clean);
-                    } catch (e2) {
-                        console.error("Error irrecuperable en JSON:", str);
-                        return []; // Retorna array vacío para no romper la app
-                    }
-                }
-            };
 
             // 3. Llamada al Backend
             google.script.run
@@ -2637,6 +2826,103 @@
                 .generatePDFReport(datosParaReporte, userEmail.value);
         };
 
+        // --- FILTRADO AVANZADO DE PRIORIDAD ---
+        /**
+         * Parsea string de rangos de prioridad
+         * Ejemplos válidos:
+         * - "1, 3, 5" -> [[1,1], [3,3], [5,5]]
+         * - "1-3, 7, 9-10" -> [[1,3], [7,7], [9,10]]
+         * - "5-7" -> [[5,7]]
+         * 
+         * @param {string} rangeString - String con valores y rangos
+         * @returns {Array<Array<number>>} Array de pares [min, max]
+         */
+        const parsePriorityRanges = (rangeString) => {
+          if (!rangeString || rangeString.trim() === '') {
+            return [];
+          }
+          
+          const ranges = [];
+          
+          // Dividir por comas y limpiar espacios
+          const parts = rangeString.split(',').map(p => p.trim()).filter(p => p);
+          
+          parts.forEach(part => {
+            // Verificar si es un rango (contiene guión)
+            if (part.includes('-')) {
+              const [start, end] = part.split('-').map(n => parseInt(n.trim(), 10));
+              
+              // Validar que ambos números sean válidos y estén en rango 1-10
+              if (!isNaN(start) && !isNaN(end) && start >= 1 && end <= 10 && start <= end) {
+                ranges.push([start, end]);
+              } else {
+                console.warn(`Rango inválido ignorado: "${part}"`);
+              }
+            } 
+            // Es un número individual
+            else {
+              const num = parseInt(part, 10);
+              
+              if (!isNaN(num) && num >= 1 && num <= 10) {
+                ranges.push([num, num]);
+              } else {
+                console.warn(`Valor inválido ignorado: "${part}"`);
+              }
+            }
+          });
+          
+          return ranges;
+        };
+
+        /**
+         * Verifica si un valor de prioridad está dentro de los rangos especificados
+         * @param {number|null} priority - Valor de prioridad (1-10)
+         * @param {Array<Array<number>>} ranges - Array de rangos [[min, max], ...]
+         * @returns {boolean}
+         */
+        const isPriorityInRanges = (priority, ranges) => {
+          // Si no hay rangos definidos, no filtrar (mostrar todo)
+          if (!ranges || ranges.length === 0) {
+            return true;
+          }
+          
+          // Si el proyecto no tiene prioridad, no pasa el filtro
+          if (priority === null || priority === undefined) {
+            return false;
+          }
+          
+          // Verificar si el valor está dentro de alguno de los rangos
+          return ranges.some(([min, max]) => priority >= min && priority <= max);
+        };
+
+        /**
+        * Valida formato del string de rangos en tiempo real
+        * @param {string} rangeString
+        * @returns {Object} {valid: boolean, message: string}
+        */
+        const validatePriorityRangeInput = (rangeString) => {
+          if (!rangeString || rangeString.trim() === '') {
+            return { valid: true, message: '' };
+          }
+          
+          const ranges = parsePriorityRanges(rangeString);
+          
+          if (ranges.length === 0) {
+            return { 
+              valid: false, 
+              message: 'Formato inválido. Use: 1, 3, 5-7, 10' 
+            };
+          }
+          
+          // Contar cuántos valores individuales están incluidos
+          const totalValues = ranges.reduce((sum, [min, max]) => sum + (max - min + 1), 0);
+          
+          return { 
+            valid: true, 
+            message: `✓ ${totalValues} nivel${totalValues !== 1 ? 'es' : ''} de prioridad seleccionado${totalValues !== 1 ? 's' : ''}` 
+          };
+        };
+
        // --- PROPIEDAD COMPUTADA MAESTRA (FILTRO + ORDEN VISUAL) ---
         const reportProyectosFiltrados = computed(() => {
           if (!reportData.value || !Array.isArray(reportData.value)) return [];
@@ -2655,6 +2941,18 @@
           }
           // ... (Tus otros filtros de fecha y avance van aquí igual que antes) ...
           // Si tienes filtros de fecha/avance, asegúrate de mantenerlos aquí.
+
+            // ✅ NUEVO: Filtro por Rangos de Prioridad
+          if (reportFilters.value.prioridadRangos && reportFilters.value.prioridadRangos.trim() !== '') {
+            const ranges = parsePriorityRanges(reportFilters.value.prioridadRangos);
+            
+            if (ranges.length > 0) {
+              filtered = filtered.filter(p => {
+                const priority = extractPriority(p.cliente);
+                return isPriorityInRanges(priority, ranges);
+              });
+            }
+          }
 
 
           // --- 2. ORDENAMIENTO INTELIGENTE (AQUÍ ESTÁ LA MAGIA) ---
@@ -2746,7 +3044,8 @@
             fechaFinDesde: '',
             fechaFinHasta: '',
             avanceOperador: '=',
-            avanceValor: null
+            avanceValor: null,
+            prioridadRangos: ''
           };
         };
 
@@ -3774,30 +4073,55 @@
           }
         };
 
-        // --- CORRECCIÓN EN EL SCRIPT (Al final del archivo Index.html) ---
         const parseJson = (str) => {
-          // 1. Si no hay dato, devolver array vacío inmediatamente
-          if (str === undefined || str === null || str === '') return [];
+          // 1. Validaciones iniciales
+          if (str === undefined || str === null || str === '') {
+            console.log('📋 parseJson: String vacío o null');
+            return [];
+          }
           
-          // 2. Si ya es un objeto (y no es null), devolverlo
-          if (typeof str === 'object') return str;
+          // 2. Si ya es un array u objeto válido, devolverlo
+          if (Array.isArray(str)) {
+            console.log('📋 parseJson: Ya es array, retornando directamente');
+            return str;
+          }
           
+          if (typeof str === 'object' && str !== null) {
+            console.log('📋 parseJson: Ya es objeto, retornando directamente');
+            return str;
+          }
+          
+          // 3. Intentar parseo directo
           try {
-            // 3. Parsear
             const result = JSON.parse(str);
-            // 4. Si el resultado es null (ej. string "null"), devolver array vacío
-            return result || [];
+            console.log('✅ parseJson: Parseo exitoso', result);
+            return Array.isArray(result) ? result : (result || []);
           } catch (e) {
-            // 5. Intentar limpieza si falla el parseo normal
-            try {
-              let clean = String(str).replace(/^"|"$/g, '').replace(/""/g, '"');
-              const res2 = JSON.parse(clean);
-              return res2 || [];
-            } catch (e2) {
-              return []; // En caso de error total, devolver array vacío
+            console.warn('⚠️ parseJson: Fallo parseo directo, intentando limpieza...', e.message);
+          }
+          
+          // 4. Limpieza de formato CSV (comillas dobles escapadas)
+          try {
+            let clean = String(str).trim();
+            
+            // Remover comillas al inicio y final si existen
+            if (clean.startsWith('"') && clean.endsWith('"')) {
+              clean = clean.substring(1, clean.length - 1);
             }
+            
+            // Reemplazar comillas escapadas de CSV ("" -> ")
+            clean = clean.replace(/""/g, '"');
+            
+            const result = JSON.parse(clean);
+            console.log('✅ parseJson: Parseo con limpieza exitoso', result);
+            return Array.isArray(result) ? result : (result || []);
+            
+          } catch (e2) {
+            console.error('❌ parseJson: Error irrecuperable', str, e2);
+            return [];
           }
         };
+
         const addChecklistItem = () => {
           if (!form.value.items) form.value.items = [];
           form.value.items.push({ label: '', type: 'checkvalue' });
@@ -3941,29 +4265,60 @@
               break;
 
             case 'checklist':
-              let items = [];
-              if (d && d.config_json) {
-                items = parseJson(d.config_json); // Asegúrate de tener definida esta helper parseJson
-              }
-              form.value = d ? { ...d, items } : { nombre_checklist: '', items: [] };
+            console.log('📋 Abriendo modal checklist:', d);
+            
+            let items = [];
+            if (d && d.config_json) {
+              console.log('📋 config_json encontrado:', d.config_json);
+              items = parseJson(d.config_json);
+              console.log('📋 Items parseados:', items);
+            }
+            
+            // CRÍTICO: Asignar items al form
+            form.value = d ? { 
+              ...d, 
+              items: items // Aseguramos que items esté presente
+            } : { 
+              nombre_checklist: '', 
+              items: [] 
+            };
+            
+            console.log('📋 Form.value final:', form.value);
+            console.log('📋 Form.value.items:', form.value.items);
 
-              // Inicialización de Sortable (Drag & Drop)
-              nextTick(() => {
-                const el = document.getElementById('sortable-items');
-                if (el) {
-                  Sortable.getOrCreateInstance ? Sortable.getOrCreateInstance(el) : null; // Evitar duplicados
-                  Sortable.create(el, {
-                    animation: 150,
-                    handle: '.handle',
-                    ghostClass: 'bg-light-olive', // Clase personalizada con #556B2F al 10%
-                    onEnd: (evt) => {
-                      const item = form.value.items.splice(evt.oldIndex, 1)[0];
-                      form.value.items.splice(evt.newIndex, 0, item);
-                    }
-                  });
+            // Inicialización de Sortable (Drag & Drop)
+            nextTick(() => {
+              const el = document.getElementById('sortable-items');
+              if (el) {
+                // 1. DESTRUIR instancia previa si existe (evitar duplicados)
+                const existingInstance = el.sortableInstance;
+                if (existingInstance) {
+                  existingInstance.destroy();
+                  console.log('🗑️ Sortable anterior destruido');
                 }
-              });
-              break;
+                
+                // 2. CREAR nueva instancia
+                const sortable = Sortable.create(el, {
+                  animation: 150,
+                  handle: '.handle',
+                  ghostClass: 'bg-light',
+                  chosenClass: 'border-expert',
+                  dragClass: 'opacity-50',
+                  onEnd: (evt) => {
+                    console.log(`📦 Item movido de ${evt.oldIndex} a ${evt.newIndex}`);
+                    const item = form.value.items.splice(evt.oldIndex, 1)[0];
+                    form.value.items.splice(evt.newIndex, 0, item);
+                  }
+                });
+                
+                // 3. GUARDAR referencia para destruir después
+                el.sortableInstance = sortable;
+                console.log('✅ Sortable inicializado correctamente');
+              } else {
+                console.error('❌ No se encontró el elemento #sortable-items');
+              }
+            });
+            break;
 
             case 'proyecto':
             const tipoDefault = tipos.value.length > 0 ? tipos.value[0].id : '';
@@ -4027,12 +4382,126 @@
         };
         const formatDate = (d) => d ? new Date(d).toLocaleDateString() : '-';
 
+        // --- SISTEMA DE PRIORIDAD VISUAL ---
+
+        /**
+         * Extrae el valor de prioridad del campo cliente
+         * Ejemplo: "SIROQUES CASA NUEVA [09]" -> 9
+         */
+        const extractPriority = (clienteText) => {
+          if (!clienteText) return null;
+          
+          // Buscar patrón [XX] donde XX es un número de 1 o 2 dígitos
+          const match = clienteText.match(/\[(\d{1,2})\]/);
+          
+          if (match && match[1]) {
+            const value = parseInt(match[1], 10);
+            // Validar que esté en rango 1-10
+            return (value >= 1 && value <= 10) ? value : null;
+          }
+          
+          return null;
+        };
+
+        /**
+         * Obtiene el color HEX según el nivel de prioridad
+         */
+        const getPriorityColor = (priority) => {
+          const colorMap = {
+            10: '#B22222', // Rojo Sangre - Urgencia máxima
+            9:  '#FF0000', // Rojo Brillante - Alerta inmediata
+            8:  '#FF4500', // Naranja Oscuro - Acción necesaria pronto
+            7:  '#FF8C00', // Naranja - Importante, no crítico
+            6:  '#FFBF00', // Ámbar - Atención moderada
+            5:  '#FFD700', // Amarillo - En espera de recursos
+            4:  '#9ACD32', // Lima/Verde - Mantenimiento/Rutina
+            3:  '#90EE90', // Verde Claro - Impacto a largo plazo
+            2:  '#ADD8E6', // Azul Pálido - Ideas o backlog
+            1:  '#D3D3D3'  // Gris Suave - Sin impacto inmediato
+          };
+          
+          return colorMap[priority] || '#6c757d'; // Gris por defecto si no hay prioridad
+        };
+
+        /**
+         * Obtiene texto descriptivo del nivel de prioridad
+         */
+        const getPriorityLabel = (priority) => {
+          const labelMap = {
+            10: 'URGENTE',
+            9:  'MUY ALTA',
+            8:  'ALTA',
+            7:  'ALTA',
+            6:  'MEDIA',
+            5:  'MEDIA',
+            4:  'BAJA',
+            3:  'BAJA',
+            2:  'MUY BAJA',
+            1:  'OPCIONAL'
+          };
+          
+          return labelMap[priority] || 'N/A';
+        };
+
+        /**
+         * Obtiene información completa de prioridad para un proyecto
+         */
+        const getProjectPriority = (proyecto) => {
+          if (!proyecto || !proyecto.cliente) {
+            return {
+              value: null,
+              color: '#6c757d',
+              label: 'SIN PRIORIDAD',
+              hasIndicator: false
+            };
+          }
+          
+          const priority = extractPriority(proyecto.cliente);
+          
+          if (priority === null) {
+            return {
+              value: null,
+              color: '#6c757d',
+              label: 'SIN PRIORIDAD',
+              hasIndicator: false
+            };
+          }
+          
+          return {
+            value: priority,
+            color: getPriorityColor(priority),
+            label: getPriorityLabel(priority),
+            hasIndicator: true
+          };
+        };
+
+        // Helper para extraer valor numérico de prioridad
+        const extractPriorityValue = (clienteText) => {
+          if (!clienteText) return null;
+          const match = String(clienteText).match(/\[(\d{1,2})\]/);
+          if (match && match[1]) {
+            const value = parseInt(match[1], 10);
+            return (value >= 1 && value <= 10) ? value : null;
+          }
+          return null;
+        };
+
+        // Helper para obtener color de prioridad
+        const getPriorityColorForValue = (priority) => {
+          const colorMap = {
+            10: '#B22222', 9: '#FF0000', 8: '#FF4500', 7: '#FF8C00',
+            6: '#FFBF00', 5: '#FFD700', 4: '#9ACD32', 3: '#90EE90',
+            2: '#ADD8E6', 1: '#D3D3D3'
+          };
+          return colorMap[priority] || null;
+        };
+
         // --- RETURN ---
         return {
           isLoggedIn, loading, currentView, userEmail, userInitial,
           config, proyectos, etapas, profesionales, checklists,isAuthorized,
           activeProject, executionTasks, projectStructure, globalProgress,
-          allTareas, tareasFiltradas, selectedEtapa,
+          allTareas, tareasFiltradas, selectedEtapa, getProjectPriority, parsePriorityRanges, isPriorityInRanges, validatePriorityRangeInput,
           form, filterStatus, profesionalesFiltrados, getProjectStageInfo,
           tipos, selectedTipoConfig, etapasFiltradasPorTipo, getProjectTeam, calculateProjectProgress,
           login, logout, navigate,totalPendientes,searchQuery,proyectosFiltradosBuscador,
