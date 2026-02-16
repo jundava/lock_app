@@ -660,6 +660,55 @@
   background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
 }
 
+/* Tablas de KPIs */
+.table-hover tbody tr:hover {
+  background-color: rgba(85, 107, 47, 0.05);
+}
+
+.sticky-top {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/* Badges en tablas */
+.table .badge {
+  font-size: 0.7rem;
+  padding: 4px 8px;
+}
+
+/* Ajuste de indicadores de prioridad en tablas */
+.table .priority-indicator {
+  display: inline-flex;
+  animation: none !important; /* Sin animación en tablas para mejor rendimiento */
+}
+
+/* Scrollbar personalizado para tablas */
+.table-responsive::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 10px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Headers de cards de KPI */
+.card-header.bg-expert h6 {
+  font-size: 0.9rem;
+  letter-spacing: 0.3px;
+}
+
   </style>
 </head>
 
@@ -1156,12 +1205,14 @@
         </div>
 
         <div v-if="currentView === 'dashboard'" class="container-fluid fade-in">
+            <!-- Header -->
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h3 class="fw-bold" style="color: #556B2F;">
                     <i class="bi bi-speedometer2 me-2"></i>Panel de Control
                 </h3>
             </div>
 
+            <!-- KPIs Principales -->
             <div class="row g-3 mb-4">
                 <div class="col-md-3">
                     <div class="card border-0 shadow-sm h-100">
@@ -1203,6 +1254,224 @@
                                 {{ Math.round(dashAvancePromedio) }}%
                             </h2>
                             <div class="text-muted small text-uppercase fw-bold ls-1">Avance Global</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPIs Avanzados - Fila 1 -->
+            <div class="row g-3 mb-3">
+                
+                <!-- KPI 1: Proyectos por Profesional y Tipo -->
+                <div class="col-md-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-header bg-expert text-white">
+                            <h6 class="mb-0 fw-bold">
+                                <i class="bi bi-people-fill me-2"></i>Proyectos por Profesional y Tipo
+                            </h6>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                                <table class="table table-sm table-hover mb-0" style="font-size: 0.85rem;">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th class="ps-3">Profesional</th>
+                                            <th>Tipo de Proyecto</th>
+                                            <th class="text-center">Cantidad</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template v-for="(tipos, profId) in kpiProyectosPorProfesionalYTipo" :key="'prof-tipo-' + profId">
+                                            <tr v-for="(count, tipoId) in tipos" :key="'prof-tipo-' + profId + '-' + tipoId">
+                                                <td class="ps-3">
+                                                    <span class="fw-bold text-dark">{{ getProfesionalNombre(profId) }}</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge" 
+                                                          :style="{backgroundColor: getProjectTypeInfo(tipoId).color, color: 'white'}">
+                                                        {{ getTipoNombre(tipoId) }}
+                                                    </span>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge bg-secondary">{{ count }}</span>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                        <tr v-if="Object.keys(kpiProyectosPorProfesionalYTipo).length === 0">
+                                            <td colspan="3" class="text-center text-muted py-3">
+                                                <i class="bi bi-inbox"></i> Sin datos disponibles
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KPI 2: Proyectos por Profesional y Prioridad -->
+                <div class="col-md-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-header bg-expert text-white">
+                            <h6 class="mb-0 fw-bold">
+                                <i class="bi bi-exclamation-triangle-fill me-2"></i>Proyectos por Profesional y Prioridad
+                            </h6>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                                <table class="table table-sm table-hover mb-0" style="font-size: 0.85rem;">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th class="ps-3">Profesional</th>
+                                            <th>Nivel de Prioridad</th>
+                                            <th class="text-center">Cantidad</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template v-for="(prioridades, profId) in kpiProyectosPorProfesionalYPrioridad" :key="'prof-prio-' + profId">
+                                            <tr v-for="(count, prioridad) in prioridades" :key="'prof-prio-' + profId + '-' + prioridad">
+                                                <td class="ps-3">
+                                                    <span class="fw-bold text-dark">{{ getProfesionalNombre(profId) }}</span>
+                                                </td>
+                                                <td>
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <div v-if="prioridad > 0" 
+                                                            class="priority-indicator"
+                                                            :style="{ 
+                                                              backgroundColor: getPrioridadColor(prioridad),
+                                                              borderColor: getPrioridadColor(prioridad),
+                                                              width: '24px',
+                                                              height: '24px'
+                                                            }">
+                                                            <span class="priority-value" style="font-size: 0.65rem;">{{ prioridad }}</span>
+                                                        </div>
+                                                        <span class="badge" 
+                                                              :style="{
+                                                                backgroundColor: getPrioridadColor(prioridad) + '30',
+                                                                color: getPrioridadColor(prioridad),
+                                                                border: '1px solid ' + getPrioridadColor(prioridad)
+                                                              }">
+                                                            {{ getPrioridadLabel(prioridad) }}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge bg-secondary">{{ count }}</span>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                        <tr v-if="Object.keys(kpiProyectosPorProfesionalYPrioridad).length === 0">
+                                            <td colspan="3" class="text-center text-muted py-3">
+                                                <i class="bi bi-inbox"></i> Sin datos disponibles
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPIs Avanzados - Fila 2 -->
+            <div class="row g-3">
+                
+                <!-- KPI 3: Proyectos por Avance y Prioridad -->
+                <div class="col-md-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-header bg-expert text-white">
+                            <h6 class="mb-0 fw-bold">
+                                <i class="bi bi-bar-chart-fill me-2"></i>Proyectos por Avance y Prioridad
+                            </h6>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                                <table class="table table-sm table-hover mb-0" style="font-size: 0.85rem;">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th class="ps-3">Rango de Avance</th>
+                                            <th>Prioridad</th>
+                                            <th class="text-center">Cantidad</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template v-for="(prioridades, rango) in kpiProyectosPorAvanceYPrioridad" :key="'avance-prio-' + rango">
+                                            <tr v-for="(count, prioridad) in prioridades" :key="'avance-prio-' + rango + '-' + prioridad">
+                                                <td class="ps-3">
+                                                    <span class="badge bg-primary">{{ rango }}</span>
+                                                </td>
+                                                <td>
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <div v-if="prioridad > 0" 
+                                                            class="priority-indicator"
+                                                            :style="{ 
+                                                              backgroundColor: getPrioridadColor(prioridad),
+                                                              borderColor: getPrioridadColor(prioridad),
+                                                              width: '24px',
+                                                              height: '24px'
+                                                            }">
+                                                            <span class="priority-value" style="font-size: 0.65rem;">{{ prioridad }}</span>
+                                                        </div>
+                                                        <span class="badge" 
+                                                              :style="{
+                                                                backgroundColor: getPrioridadColor(prioridad) + '30',
+                                                                color: getPrioridadColor(prioridad),
+                                                                border: '1px solid ' + getPrioridadColor(prioridad)
+                                                              }">
+                                                            {{ getPrioridadLabel(prioridad) }}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge bg-secondary">{{ count }}</span>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KPI 4: Proyectos por Avance y Tipo -->
+                <div class="col-md-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-header bg-expert text-white">
+                            <h6 class="mb-0 fw-bold">
+                                <i class="bi bi-diagram-3-fill me-2"></i>Proyectos por Avance y Tipo
+                            </h6>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                                <table class="table table-sm table-hover mb-0" style="font-size: 0.85rem;">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th class="ps-3">Rango de Avance</th>
+                                            <th>Tipo de Proyecto</th>
+                                            <th class="text-center">Cantidad</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template v-for="(tipos, rango) in kpiProyectosPorAvanceYTipo" :key="'avance-tipo-' + rango">
+                                            <tr v-for="(count, tipoId) in tipos" :key="'avance-tipo-' + rango + '-' + tipoId">
+                                                <td class="ps-3">
+                                                    <span class="badge bg-primary">{{ rango }}</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge" 
+                                                          :style="{backgroundColor: getProjectTypeInfo(tipoId).color, color: 'white'}">
+                                                        {{ getTipoNombre(tipoId) }}
+                                                    </span>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge bg-secondary">{{ count }}</span>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -3230,6 +3499,164 @@
              return (dashTareasCompletadas.value / dashTotalTareas.value) * 100;
         });
 
+        // ========== KPIs AVANZADOS PARA DASHBOARD ==========
+
+        /**
+         * KPI 1: Total de proyectos por profesional y tipo
+         * Estructura: { profesionalId: { tipoId: count } }
+         */
+        const kpiProyectosPorProfesionalYTipo = computed(() => {
+          if (!proyectosFiltradosBuscador.value || !allAsignaciones.value) return {};
+          
+          const data = {};
+          
+          proyectosFiltradosBuscador.value.forEach(proyecto => {
+            // Obtener profesionales asignados a este proyecto
+            const profesionalesIds = allAsignaciones.value
+              .filter(a => a.id_proyecto === proyecto.id)
+              .map(a => a.id_profesional);
+            
+            const tipoId = proyecto.id_tipo_proyecto || 'SIN_TIPO';
+            
+            profesionalesIds.forEach(profId => {
+              if (!data[profId]) data[profId] = {};
+              if (!data[profId][tipoId]) data[profId][tipoId] = 0;
+              data[profId][tipoId]++;
+            });
+          });
+          
+          return data;
+        });
+
+        /**
+         * KPI 2: Total de proyectos por profesional y prioridad
+         * Estructura: { profesionalId: { prioridad: count } }
+         */
+        const kpiProyectosPorProfesionalYPrioridad = computed(() => {
+          if (!proyectosFiltradosBuscador.value || !allAsignaciones.value) return {};
+          
+          const data = {};
+          
+          proyectosFiltradosBuscador.value.forEach(proyecto => {
+            const profesionalesIds = allAsignaciones.value
+              .filter(a => a.id_proyecto === proyecto.id)
+              .map(a => a.id_profesional);
+            
+            const prioridadInfo = getProjectPriority(proyecto);
+            const prioridad = prioridadInfo.value || 0; // 0 = sin prioridad
+            
+            profesionalesIds.forEach(profId => {
+              if (!data[profId]) data[profId] = {};
+              if (!data[profId][prioridad]) data[profId][prioridad] = 0;
+              data[profId][prioridad]++;
+            });
+          });
+          
+          return data;
+        });
+
+        /**
+         * KPI 3: Total de proyectos por nivel de avance y prioridad
+         * Niveles: 0-25%, 26-50%, 51-75%, 76-99%, 100%
+         * Estructura: { rangoAvance: { prioridad: count } }
+         */
+        const kpiProyectosPorAvanceYPrioridad = computed(() => {
+          if (!proyectosFiltradosBuscador.value) return {};
+          
+          const data = {
+            '0-25%': {},
+            '26-50%': {},
+            '51-75%': {},
+            '76-99%': {},
+            '100%': {}
+          };
+          
+          proyectosFiltradosBuscador.value.forEach(proyecto => {
+            const avance = calculateProjectProgress(proyecto.id);
+            const prioridadInfo = getProjectPriority(proyecto);
+            const prioridad = prioridadInfo.value || 0;
+            
+            // Determinar rango de avance
+            let rango;
+            if (avance === 100) rango = '100%';
+            else if (avance >= 76) rango = '76-99%';
+            else if (avance >= 51) rango = '51-75%';
+            else if (avance >= 26) rango = '26-50%';
+            else rango = '0-25%';
+            
+            if (!data[rango][prioridad]) data[rango][prioridad] = 0;
+            data[rango][prioridad]++;
+          });
+          
+          return data;
+        });
+
+        /**
+        * KPI 4: Total de proyectos por nivel de avance y tipo
+        * Estructura: { rangoAvance: { tipoId: count } }
+        */
+        const kpiProyectosPorAvanceYTipo = computed(() => {
+          if (!proyectosFiltradosBuscador.value) return {};
+          
+          const data = {
+            '0-25%': {},
+            '26-50%': {},
+            '51-75%': {},
+            '76-99%': {},
+            '100%': {}
+          };
+          
+          proyectosFiltradosBuscador.value.forEach(proyecto => {
+            const avance = calculateProjectProgress(proyecto.id);
+            const tipoId = proyecto.id_tipo_proyecto || 'SIN_TIPO';
+            
+            let rango;
+            if (avance === 100) rango = '100%';
+            else if (avance >= 76) rango = '76-99%';
+            else if (avance >= 51) rango = '51-75%';
+            else if (avance >= 26) rango = '26-50%';
+            else rango = '0-25%';
+            
+            if (!data[rango][tipoId]) data[rango][tipoId] = 0;
+            data[rango][tipoId]++;
+          });
+          
+          return data;
+        });
+
+        /**
+        * Helper: Obtener nombre de profesional por ID
+        */
+        const getProfesionalNombre = (id) => {
+          const prof = profesionales.value.find(p => p.id === id);
+          return prof ? prof.nombre_completo : 'Desconocido';
+        };
+
+        /**
+        * Helper: Obtener nombre de tipo por ID
+        */
+        const getTipoNombre = (id) => {
+          if (id === 'SIN_TIPO') return 'Sin Tipo';
+          const tipo = tipos.value.find(t => t.id === id);
+          return tipo ? tipo.nombre_tipo : 'Desconocido';
+        };
+
+        /**
+        * Helper: Obtener color de prioridad
+        */
+        const getPrioridadColor = (prioridad) => {
+          if (prioridad === 0) return '#6c757d';
+          return getPriorityColor(prioridad);
+        };
+
+        /**
+        * Helper: Obtener label de prioridad
+        */
+        const getPrioridadLabel = (prioridad) => {
+          if (prioridad === 0) return 'Sin Prioridad';
+          return getPriorityLabel(prioridad);
+        };
+
         // 1. Verifica si una tarea tiene evidencia válida (sin romper la app)
         const hasValidEvidence = (task) => {
             if (!task || !task.datos_evidencia) return false;
@@ -4516,7 +4943,9 @@
           reportTotalTareas, reportTareasCompletadas, reportAvancePromedio,
           loadReportData, toggleFilters, resetReportFilters, reportViewMode, ganttScale, ganttColumnWidth, ganttTimeline, getGanttBarStyle,
           setSortField, toggleSortOrder, dashTotalTareas, dashTareasCompletadas, dashAvancePromedio,
-          getProyectoTotalTareas, getProyectoTareasCompletadas, currentChecklistTask, showChecklistModal
+          getProyectoTotalTareas, getProyectoTareasCompletadas, currentChecklistTask, showChecklistModal, kpiProyectosPorProfesionalYTipo,
+          kpiProyectosPorProfesionalYPrioridad, kpiProyectosPorAvanceYPrioridad, kpiProyectosPorAvanceYTipo, 
+          getProfesionalNombre, getTipoNombre, getPrioridadColor, getPrioridadLabel
         };
       }
     }).mount('#app');
