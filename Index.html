@@ -332,21 +332,6 @@
       }
     }
 
-    /* Loader */
-    .loading-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(255, 255, 255, 0.85);
-      z-index: 9999;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      backdrop-filter: blur(2px);
-    }
-
     /* Estilos para Maestro-Detalle */
     .bg-expert-light {
       background-color: rgba(85, 107, 47, 0.1) !important;
@@ -453,263 +438,303 @@
     }
 
     /* --- ESTILOS GANTT CHART --- */
-.gantt-container {
-  overflow-x: auto;
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  position: relative;
-}
+    .gantt-container {
+      overflow-x: auto;
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      position: relative;
+    }
 
-.gantt-header {
-  display: flex;
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #ddd;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
+    .gantt-header {
+      display: flex;
+      background-color: #f8f9fa;
+      border-bottom: 1px solid #ddd;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
 
-.gantt-header-cell {
-  flex-shrink: 0;
-  border-right: 1px solid #eee;
-  padding: 8px;
-  text-align: center;
-  font-size: 0.75rem;
-  font-weight: bold;
-  color: #666;
-  background: #f8f9fa;
-}
+    .gantt-header-cell {
+      flex-shrink: 0;
+      border-right: 1px solid #eee;
+      padding: 8px;
+      text-align: center;
+      font-size: 0.75rem;
+      font-weight: bold;
+      color: #666;
+      background: #f8f9fa;
+    }
 
-.gantt-body {
-  position: relative;
-  min-height: 200px;
-}
+    .gantt-body {
+      position: relative;
+      min-height: 200px;
+    }
 
-.gantt-row {
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid #f0f0f0;
-  height: 45px; /* Altura de fila */
-  position: relative;
-}
+    .gantt-row {
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid #f0f0f0;
+      height: 45px; /* Altura de fila */
+      position: relative;
+    }
 
-.gantt-row:hover {
-  background-color: #fafafa;
-}
+    .gantt-row:hover {
+      background-color: #fafafa;
+    }
 
-/* Columna lateral fija (Nombre proyecto) */
-.gantt-sidebar-item {
-  position: sticky;
-  left: 0;
-  background: white;
-  z-index: 5;
-  width: 200px; /* Ancho fijo nombre */
-  padding: 0 10px;
-  border-right: 2px solid #e0e0e0;
-  display: flex;
-  align-items: center;
-  height: 45px;
-  box-shadow: 2px 0 5px rgba(0,0,0,0.05);
-}
+    /* Columna lateral fija (Nombre proyecto) */
+    .gantt-sidebar-item {
+      position: sticky;
+      left: 0;
+      background: white;
+      z-index: 5;
+      width: 200px; /* Ancho fijo nombre */
+      padding: 0 10px;
+      border-right: 2px solid #e0e0e0;
+      display: flex;
+      align-items: center;
+      height: 45px;
+      box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+    }
 
-.gantt-timeline-wrapper {
-  flex-grow: 1;
-  position: relative;
-  height: 100%;
-}
+    .gantt-timeline-wrapper {
+      flex-grow: 1;
+      position: relative;
+      height: 100%;
+    }
 
-/* Líneas verticales de fondo */
-.gantt-grid-lines {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  pointer-events: none;
-}
+    /* Líneas verticales de fondo */
+    .gantt-grid-lines {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      pointer-events: none;
+    }
 
-.gantt-grid-line {
-  border-right: 1px dashed #eee;
-  flex-shrink: 0;
-  height: 100%;
-}
+    .gantt-grid-line {
+      border-right: 1px dashed #eee;
+      flex-shrink: 0;
+      height: 100%;
+    }
 
-/* La barra del proyecto */
-.gantt-bar {
-  position: absolute;
-  top: 10px; /* Centrado verticalmente (45px altura - 25px barra) / 2 */
-  height: 25px;
-  border-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  white-space: nowrap;
-}
+    /* La barra del proyecto */
+    .gantt-bar {
+      position: absolute;
+      top: 10px; /* Centrado verticalmente (45px altura - 25px barra) / 2 */
+      height: 25px;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      white-space: nowrap;
+    }
 
-.gantt-bar:hover {
-  transform: translateY(-1px);
-  filter: brightness(0.95);
-  z-index: 20; /* Que sobresalga al hover */
-}
+    .gantt-bar:hover {
+      transform: translateY(-1px);
+      filter: brightness(0.95);
+      z-index: 20; /* Que sobresalga al hover */
+    }
 
-/* Barra de progreso interna */
-.gantt-bar-progress {
-  height: 100%;
-  background-color: rgba(255,255,255,0.3);
-  position: absolute;
-  left: 0;
-  top: 0;
-}
+    /* Barra de progreso interna */
+    .gantt-bar-progress {
+      height: 100%;
+      background-color: rgba(255,255,255,0.3);
+      position: absolute;
+      left: 0;
+      top: 0;
+    }
 
-.gantt-bar-label {
-  position: sticky;
-  left: 5px;
-  font-size: 0.7rem;
-  color: white;
-  padding-left: 5px;
-  font-weight: bold;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-  z-index: 2;
-}
+    .gantt-bar-label {
+      position: sticky;
+      left: 5px;
+      font-size: 0.7rem;
+      color: white;
+      padding-left: 5px;
+      font-weight: bold;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+      z-index: 2;
+    }
 
-/* ==========================================================================
-   SISTEMA DE INDICADORES DE PRIORIDAD
-   ========================================================================== */
+    /* ==========================================================================
+      SISTEMA DE INDICADORES DE PRIORIDAD
+      ========================================================================== */
 
-.priority-indicator {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 2px solid;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-  transition: all 0.2s ease;
-  cursor: help;
-}
+    .priority-indicator {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+      transition: all 0.2s ease;
+      cursor: help;
+    }
 
-.priority-indicator:hover {
-  transform: scale(1.15);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-}
+    .priority-indicator:hover {
+      transform: scale(1.15);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    }
 
-.priority-value {
-  font-size: 0.75rem;
-  font-weight: 900;
-  color: white;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  letter-spacing: -0.5px;
-}
+    .priority-value {
+      font-size: 0.75rem;
+      font-weight: 900;
+      color: white;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+      letter-spacing: -0.5px;
+    }
 
-/* Efecto de pulso para prioridades críticas (9-10) */
-@keyframes priority-pulse {
-  0%, 100% {
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-  }
-  50% {
-    box-shadow: 0 4px 12px rgba(255, 0, 0, 0.4), 0 0 15px rgba(255, 0, 0, 0.3);
-  }
-}
+    /* Efecto de pulso para prioridades críticas (9-10) */
+    @keyframes priority-pulse {
+      0%, 100% {
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+      }
+      50% {
+        box-shadow: 0 4px 12px rgba(255, 0, 0, 0.4), 0 0 15px rgba(255, 0, 0, 0.3);
+      }
+    }
 
-/* Aplicar animación solo a prioridades críticas en las tarjetas */
-.project-card .priority-indicator[style*="#B22222"],
-.project-card .priority-indicator[style*="#FF0000"] {
-  animation: priority-pulse 2s ease-in-out infinite;
-}
+    /* Aplicar animación solo a prioridades críticas en las tarjetas */
+    .project-card .priority-indicator[style*="#B22222"],
+    .project-card .priority-indicator[style*="#FF0000"] {
+      animation: priority-pulse 2s ease-in-out infinite;
+    }
 
-/* Ajustes para indicador en Gantt */
-.gantt-sidebar-item .priority-indicator {
-  width: 24px !important;
-  height: 24px !important;
-  min-width: 24px;
-  flex-shrink: 0;
-}
+    /* Ajustes para indicador en Gantt */
+    .gantt-sidebar-item .priority-indicator {
+      width: 24px !important;
+      height: 24px !important;
+      min-width: 24px;
+      flex-shrink: 0;
+    }
 
-.gantt-sidebar-item .priority-value {
-  font-size: 0.65rem !important;
-}
+    .gantt-sidebar-item .priority-value {
+      font-size: 0.65rem !important;
+    }
 
-/* Desactivar animación en Gantt para no sobrecargar */
-.gantt-sidebar-item .priority-indicator {
-  animation: none !important;
-}
+    /* Desactivar animación en Gantt para no sobrecargar */
+    .gantt-sidebar-item .priority-indicator {
+      animation: none !important;
+    }
 
-/* Filtro de Prioridad en Reportes */
-.form-control.is-valid {
-  border-color: #28a745;
-  padding-right: calc(1.5em + 0.75rem);
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%2328a745' d='M2.3 6.73L.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1z'/%3e%3c/svg%3e");
-  background-repeat: no-repeat;
-  background-position: right calc(0.375em + 0.1875rem) center;
-  background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
-}
+    /* Filtro de Prioridad en Reportes */
+    .form-control.is-valid {
+      border-color: #28a745;
+      padding-right: calc(1.5em + 0.75rem);
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%2328a745' d='M2.3 6.73L.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1z'/%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right calc(0.375em + 0.1875rem) center;
+      background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+    }
 
-.form-control.is-invalid {
-  border-color: #dc3545;
-  padding-right: calc(1.5em + 0.75rem);
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
-  background-repeat: no-repeat;
-  background-position: right calc(0.375em + 0.1875rem) center;
-  background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
-}
+    .form-control.is-invalid {
+      border-color: #dc3545;
+      padding-right: calc(1.5em + 0.75rem);
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right calc(0.375em + 0.1875rem) center;
+      background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+    }
 
-/* Tablas de KPIs */
-.table-hover tbody tr:hover {
-  background-color: rgba(85, 107, 47, 0.05);
-}
+    /* Tablas de KPIs */
+    .table-hover tbody tr:hover {
+      background-color: rgba(85, 107, 47, 0.05);
+    }
 
-.sticky-top {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
+    .sticky-top {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
 
-/* Badges en tablas */
-.table .badge {
-  font-size: 0.7rem;
-  padding: 4px 8px;
-}
+    /* Badges en tablas */
+    .table .badge {
+      font-size: 0.7rem;
+      padding: 4px 8px;
+    }
 
-/* Ajuste de indicadores de prioridad en tablas */
-.table .priority-indicator {
-  display: inline-flex;
-  animation: none !important; /* Sin animación en tablas para mejor rendimiento */
-}
+    /* Ajuste de indicadores de prioridad en tablas */
+    .table .priority-indicator {
+      display: inline-flex;
+      animation: none !important; /* Sin animación en tablas para mejor rendimiento */
+    }
 
-/* Scrollbar personalizado para tablas */
-.table-responsive::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
+    /* Scrollbar personalizado para tablas */
+    .table-responsive::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
 
-.table-responsive::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 10px;
-}
+    .table-responsive::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 10px;
+    }
 
-.table-responsive::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 10px;
-}
+    .table-responsive::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 10px;
+    }
 
-.table-responsive::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
+    .table-responsive::-webkit-scrollbar-thumb:hover {
+      background: #555;
+    }
 
-/* Headers de cards de KPI */
-.card-header.bg-expert h6 {
-  font-size: 0.9rem;
-  letter-spacing: 0.3px;
-}
+    /* Headers de cards de KPI */
+    .card-header.bg-expert h6 {
+      font-size: 0.9rem;
+      letter-spacing: 0.3px;
+    }
 
-  </style>
+    /* Loader - 100% Transparente CORREGIDO */
+    .loading-overlay {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      z-index: 9999 !important;
+      display: flex !important;
+      justify-content: center !important;
+      align-items: center !important;
+      background: transparent !important; /* Fondo del overlay transparente */
+      pointer-events: none !important;
+    }
+
+    /* Spinner visible con sombra - SIN FONDO */
+    .loading-overlay .spinner-border {
+      width: 3.5rem !important;
+      height: 3.5rem !important;
+      border-width: 0.4rem !important;
+      pointer-events: auto !important;
+      filter: drop-shadow(0 4px 8px rgba(85, 107, 47, 0.4)) !important;
+      background-color: transparent !important; /* ✅ CLAVE: Eliminar fondo blanco */
+      background: transparent !important; /* ✅ Doble garantía */
+    }
+
+    /* Eliminar cualquier pseudo-elemento que pudiera crear fondo */
+    .loading-overlay::before,
+    .loading-overlay::after,
+    .loading-overlay .spinner-border::before,
+    .loading-overlay .spinner-border::after {
+      display: none !important;
+      background: transparent !important;
+    }
+
+    /* Asegurar que el contenedor padre también sea transparente */
+    .loading-overlay * {
+      background-color: transparent !important;
+    }
+
+</style>
 </head>
 
 <body>
@@ -733,8 +758,16 @@
 
     <div v-else>
       <div v-if="loading" class="loading-overlay">
-          <div class="spinner-border text-expert" role="status"></div>
-      </div>
+        <div class="spinner-border text-expert" 
+            role="status" 
+            style="width: 3.5rem !important; 
+                  height: 3.5rem !important; 
+                  border-width: 0.4rem !important; 
+                  filter: drop-shadow(0 4px 8px rgba(85, 107, 47, 0.4)) !important;
+                  background-color: transparent !important;
+                  background: transparent !important;">
+        </div>
+    </div>
 
       <div v-if="!loading && !isAuthorized" class="d-flex align-items-center justify-content-center vh-100 bg-light fade-in">
           <div class="text-center p-5 bg-white shadow rounded" style="max-width: 500px;">
