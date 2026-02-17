@@ -694,44 +694,24 @@
       letter-spacing: 0.3px;
     }
 
-    /* Loader - 100% Transparente CORREGIDO */
     .loading-overlay {
       position: fixed !important;
-      top: 0 !important;
-      left: 0 !important;
-      width: 100% !important;
-      height: 100% !important;
+      inset: 0 !important;          /* Equivale a top/left/right/bottom: 0 */
       z-index: 9999 !important;
       display: flex !important;
       justify-content: center !important;
       align-items: center !important;
-      background: transparent !important; /* Fondo del overlay transparente */
-      pointer-events: none !important;
-    }
-
-    /* Spinner visible con sombra - SIN FONDO */
-    .loading-overlay .spinner-border {
-      width: 3.5rem !important;
-      height: 3.5rem !important;
-      border-width: 0.4rem !important;
-      pointer-events: auto !important;
-      filter: drop-shadow(0 4px 8px rgba(85, 107, 47, 0.4)) !important;
-      background-color: transparent !important; /* ✅ CLAVE: Eliminar fondo blanco */
-      background: transparent !important; /* ✅ Doble garantía */
-    }
-
-    /* Eliminar cualquier pseudo-elemento que pudiera crear fondo */
-    .loading-overlay::before,
-    .loading-overlay::after,
-    .loading-overlay .spinner-border::before,
-    .loading-overlay .spinner-border::after {
-      display: none !important;
       background: transparent !important;
+      pointer-events: none !important;
+      /* Filter en el contenedor, no en el spinner */
+      filter: drop-shadow(0 4px 8px rgba(85, 107, 47, 0.5));
     }
 
-    /* Asegurar que el contenedor padre también sea transparente */
-    .loading-overlay * {
+    .loading-overlay .spinner-border {
+      pointer-events: auto !important;
+      background: none !important;
       background-color: transparent !important;
+      /* Sin filter aquí */
     }
 
 </style>
@@ -758,16 +738,19 @@
 
     <div v-else>
       <div v-if="loading" class="loading-overlay">
-        <div class="spinner-border text-expert" 
-            role="status" 
-            style="width: 3.5rem !important; 
-                  height: 3.5rem !important; 
-                  border-width: 0.4rem !important; 
-                  filter: drop-shadow(0 4px 8px rgba(85, 107, 47, 0.4)) !important;
-                  background-color: transparent !important;
-                  background: transparent !important;">
+        <div 
+          class="spinner-border text-expert" 
+          role="status"
+          style="
+            width: 3.5rem;
+            height: 3.5rem;
+            border-width: 0.4rem;
+            background: none;
+            background-color: transparent;
+            box-shadow: none;
+          ">
         </div>
-    </div>
+      </div>
 
       <div v-if="!loading && !isAuthorized" class="d-flex align-items-center justify-content-center vh-100 bg-light fade-in">
           <div class="text-center p-5 bg-white shadow rounded" style="max-width: 500px;">
@@ -974,7 +957,7 @@
                             </thead>
                             <tbody>
                               <tr v-for="e in etapasFiltradasPorTipo" :key="e.id" @click="selectEtapa(e)"
-                                class="cursor-pointer transition-effect"
+                                class="cursor-pointer transition-effect align-middle"
                                 :class="{'bg-expert-light border-start border-4 border-expert': selectedEtapa && selectedEtapa.id === e.id}">
                                 
                                 <td class="ps-3">
@@ -997,10 +980,16 @@
                                 </td>
                                 
                                 <td class="text-end pe-3">
-                                  <button class="btn btn-sm text-danger p-0 opacity-50 hover-opacity-100" 
+                                  <div class="d-flex justify-content-end align-items-center gap-1 h-100">
+                                    <button class="btn btn-sm text-expert p-1" 
+                                          @click.stop="openModal('etapa', e)" title="Editar etapa">
+                                      <i class="bi bi-pencil-square"></i>
+                                    </button>
+                                    <button class="btn btn-sm text-danger p-1 opacity-50" 
                                           @click.stop="deleteRecord('CONF_ETAPAS', e.id)" title="Eliminar etapa">
-                                    <i class="bi bi-trash"></i>
-                                  </button>
+                                      <i class="bi bi-trash"></i>
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             </tbody>
@@ -2519,7 +2508,8 @@
         <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content border-0 shadow">
             <div class="modal-header bg-expert text-white">
-              <h5 class="modal-title fs-6">Nueva Etapa</h5><button class="btn-close btn-close-white"
+              <h5 class="modal-title fs-6">{{ form.id ? 'Editar Etapa' : 'Nueva Etapa' }}</h5>
+                <button class="btn-close btn-close-white"
                 data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body bg-light">
